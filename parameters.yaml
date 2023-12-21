@@ -1,10 +1,10 @@
 
 # DATA PREP
 # Undersampling
-undersampling: 1
+undersampling: 0
 
 # Oversampling
-oversampling: 0
+oversampling: 1
 os_strategy: SMOTE # [SMOTE, random]
 smote_ratio: 1.0
 
@@ -22,5 +22,5 @@ save_plots: 1 # 1: yes, 0: no
 no_participant_leakage: 1
 
 # Training
-cross_validation: 1
+cross_validation: 0
 cv_count: 15

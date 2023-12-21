@@ -10,6 +10,7 @@ import pickle
 from datetime import datetime
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
 
 import matplotlib.pyplot as plt
 
@@ -78,7 +79,7 @@ def machine_learning(filename):
     ml_obj = MLAnalysis(parameter_path)
     ml_obj.prepare_data(data_path)
 
-    ml_obj.search_model_domain()
+    # ml_obj.search_model_domain()
 
     # Create SVM
     # svm_params = {
@@ -102,7 +103,18 @@ def machine_learning(filename):
     #
     # svm = SVC(**svm_params)
     #
-    # ml_obj.launch_model(svm, 'svm_model_5', svm_params)
+    # [CV 3/3] END max_depth=100, max_features=None, min_samples_split=20, n_estimators=5;, score=0.523 total time=  59.8s
+
+
+    random_forest = RandomForestClassifier()
+    rf_params = {
+        "bootstrap": True, "ccp_alpha": 0.0, "class_weight": None, "criterion": "gini", "max_depth": 50,
+         "max_features": 0.7, "max_leaf_nodes": None, "max_samples": None, "min_impurity_decrease": 0.0,
+         "min_samples_leaf": 1, "min_samples_split": 10, "min_weight_fraction_leaf": 0.0, "n_estimators": 5,
+         "n_jobs": None,
+         "oob_score": False, "random_state": None, "verbose": 0, "warm_start": False
+    }
+    ml_obj.launch_model(random_forest, 'rf_1', rf_params)
 
 
 now = datetime.now()

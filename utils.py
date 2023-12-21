@@ -12,7 +12,7 @@ def check_class_distribution(y):
     for label, count in class_distribution.items():
         print(f"Class {label}: {count} samples")
 
-def save_model_stats(model_name, svm_params, results, conf_mat, roc_curve):
+def save_model_stats(model_name, params, results, conf_mat, roc_curve):
     # Save model parameters and statistics to a text file
     root_path = RESULTS_PATH / model_name
     if not root_path.is_dir():  # Make sure plot dir exists.
@@ -21,12 +21,8 @@ def save_model_stats(model_name, svm_params, results, conf_mat, roc_curve):
     save_path = RESULTS_PATH / model_name / "results.txt"
     with open(save_path, 'w') as file:
         file.write("Model Parameters:\n")
-        file.write(f"C: {svm_params['C']}\n")
-        file.write(f"Kernel: {svm_params['kernel']}\n")
-        file.write(f"Gamma: {svm_params['gamma']}\n")
-        file.write(f"Probability: {svm_params['probability']}\n")
-        file.write(f"Shrinking: {svm_params['shrinking']}\n")
-        file.write(f"Tolerance: {svm_params['tol']}\n\n")
+        for key, value in params.items():
+            file.write(f"{key}: {value}\n")
 
         file.write("Model Statistics:\n")
         file.write(f"Accuracy: {results['accuracy']:.4f}\n\n")

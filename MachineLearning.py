@@ -145,8 +145,10 @@ class MLAnalysis:
 
     def launch_model(self, model, model_name, model_params):
 
+        print("Fitting model...")
         model.fit(self.X_train, self.y_train)
 
+        print("Done Fitting...")
         if self.params['cross_validation']:
             # Perform cross-validation
             cv_preds = cross_val_predict(model, self.X_train, self.y_train, cv=self.params['cv_count'])
@@ -183,7 +185,7 @@ class MLAnalysis:
                         'precision': precision,
                         'recall': recall}
 
-        save_model_stats(model_name, model_params, results_dict, conf_mat, roc_curve)
+        save_model_stats(f"{model_name}_{f1}", model_params, results_dict, conf_mat, roc_curve)
 
 
 
