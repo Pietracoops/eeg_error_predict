@@ -1,0 +1,26 @@
+
+# DATA PREP
+# Undersampling
+undersampling: 1
+
+# Oversampling
+oversampling: 0
+os_strategy: SMOTE # [SMOTE, random]
+smote_ratio: 1.0
+
+# Grid Search
+grid_search: 1
+gs_random: 0
+gs_search_iter: 5
+gs_num_folds: 3
+gs_save_params: 1 # 1: yes, 0: no
+
+# Plotting
+save_plots: 1 # 1: yes, 0: no
+
+# Participant Leakage
+no_participant_leakage: 1
+
+# Training
+cross_validation: 1
+cv_count: 15
