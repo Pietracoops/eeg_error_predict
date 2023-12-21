@@ -24,3 +24,9 @@ no_participant_leakage: 1
 # Training
 cross_validation: 0
 cv_count: 15
+
+# Neural Network
+model_name: nn_model_1
+batch_size: 32
+epochs: 100
+learning_rate: 0.001

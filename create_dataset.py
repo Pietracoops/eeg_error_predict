@@ -72,14 +72,12 @@ def process_brainvision_files():
     print("Complete processing")
 
 
-def machine_learning(filename):
-    data_path = os.getcwd() + "\\" + "flanker_data_2_20_12_23_10_25_08.pkl"
+def machine_learning_svm(filename):
+    data_path = os.getcwd() + "\\" + filename
     parameter_path = os.getcwd() + "\\parameters.yaml"
 
     ml_obj = MLAnalysis(parameter_path)
     ml_obj.prepare_data(data_path)
-
-    # ml_obj.search_model_domain()
 
     # Create SVM
     # svm_params = {
@@ -90,21 +88,39 @@ def machine_learning(filename):
     #     'shrinking': True,    # Use the shrinking heuristic
     #     'tol': 0.001          # Tolerance for stopping criterion
     # }
-    #
-    # svm_params = {
-    #     'C': 1000.0,  # Regularization parameter
-    #     'class_weight': None,
-    #     'kernel': 'poly',  # Kernel type (e.g., 'linear', 'rbf', 'poly')
-    #     'gamma': 'scale',  # Kernel coefficient ('scale' uses 1 / (n_features * X.var()))
-    #     'probability': True,  # Enable probability estimates
-    #     'shrinking': True,  # Use the shrinking heuristic
-    #     'tol': 0.001  # Tolerance for stopping criterion
-    # }
-    #
-    # svm = SVC(**svm_params)
-    #
-    # [CV 3/3] END max_depth=100, max_features=None, min_samples_split=20, n_estimators=5;, score=0.523 total time=  59.8s
+    
+    svm_params = {
+        'C': 1000.0,  # Regularization parameter
+        'class_weight': None,
+        'kernel': 'poly',  # Kernel type (e.g., 'linear', 'rbf', 'poly')
+        'gamma': 'scale',  # Kernel coefficient ('scale' uses 1 / (n_features * X.var()))
+        'probability': True,  # Enable probability estimates
+        'shrinking': True,  # Use the shrinking heuristic
+        'tol': 0.001  # Tolerance for stopping criterion
+    }
+    
+    svm = SVC(**svm_params)
 
+    ml_obj.launch_model(svm, 'svm_1', svm_params)
+
+
+def machine_learning_model_search(filename):
+    data_path = os.getcwd() + "\\" + filename
+    parameter_path = os.getcwd() + "\\parameters.yaml"
+
+    ml_obj = MLAnalysis(parameter_path)
+    ml_obj.prepare_data(data_path)
+
+    # ml_obj.search_model_domain()
+
+def machine_learning_rf(filename):
+    data_path = os.getcwd() + "\\" + filename
+    parameter_path = os.getcwd() + "\\parameters.yaml"
+
+    ml_obj = MLAnalysis(parameter_path)
+    ml_obj.prepare_data(data_path)
+
+    # ml_obj.search_model_domain()
 
     random_forest = RandomForestClassifier()
     rf_params = {
@@ -116,11 +132,21 @@ def machine_learning(filename):
     }
     ml_obj.launch_model(random_forest, 'rf_1', rf_params)
 
+def machine_learning_nn(filename):
+    print("Running machine learning for Neural Network...")
+    data_path = os.getcwd() + "\\" + filename
+    parameter_path = os.getcwd() + "\\parameters.yaml"
+
+    ml_obj = MLAnalysis(parameter_path)
+    ml_obj.prepare_data_nn(data_path)
+
+    ml_obj.run_nn_model()
+    print("Done")
 
 now = datetime.now()
 now_string = now.strftime("%d_%m_%y_%H_%M_%S")
 # process_files(f"flanker_data_2_{now_string}.pkl")
-machine_learning("flanker_data_2_20_12_23_15_44_15.pkl")
+machine_learning_nn("flanker_data_2_20_12_23_15_44_15.pkl")
 
 
 

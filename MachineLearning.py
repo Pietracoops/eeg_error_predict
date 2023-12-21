@@ -17,6 +17,160 @@ from sklearn.metrics import make_scorer
 from utils import save_params, load_params, check_pos_int_arg, check_pos_float_arg, save_plot, save_model_stats
 from plotting_metrics import (get_f1_score, plot_confusion_matrix_display,
     plot_roc_curve, get_accuracy, get_roc_score, get_precision_recall, get_feature_importance)
+import numpy as np
+import random
+
+
+# pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset, random_split
+
+# Define the neural network model
+class EEGClassifier(nn.Module):
+
+    def __init__(self):
+        super(EEGClassifier, self).__init__()
+        # Check if a GPU is available
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if self.device.type == 'cuda':
+            print("Using CUDA")
+        else:
+            print("Using CPU")
+
+        self.to(self.device) # move model to device
+
+        self.params = self.__load_parameters()
+        self.model_name = self.params['model_name']
+        self.batch_size = self.params['batch_size']
+        self.epochs = self.params['epochs']
+        self.learning_rate = self.params['learning_rate']
+
+        self.conv1d_1 = nn.Conv1d(62, 64, kernel_size=3).to(self.device)
+        self.conv1d_2 = nn.Conv1d(64, 128, kernel_size=3).to(self.device)
+        self.conv2d = nn.Conv2d(1, 128, kernel_size=(3, 3)).to(self.device)
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(128 * 126 * 146, 128).to(self.device)
+        self.fc2 = nn.Linear(128, 1).to(self.device)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        x = self.conv1d_1(x)
+        x = self.conv1d_2(x)
+        x = x.unsqueeze(1)  # Add channel dimension for conv2d
+        x = self.conv2d(x)
+        x = self.flatten(x)
+        x = self.fc1(x)
+        x = self.fc2(x)
+        x = self.sigmoid(x)
+        x = x.squeeze()
+        return x
+    
+    def __load_parameters(self):
+        self.parameter_filepath = os.getcwd() + "\\parameters.yaml"
+        with open(self.parameter_filepath, 'r') as file:
+            params = yaml.safe_load(file)
+        return params
+    
+    def load_and_split_data(self, eeg_data, labels, split_ratio=0.8):
+        # Split the data into training and testing sets
+        eeg_data = torch.Tensor(eeg_data).to(self.device)
+        labels = torch.Tensor(labels).to(self.device)
+
+        dataset = TensorDataset(eeg_data, labels)
+        train_size = int(split_ratio * len(dataset))
+        test_size = len(dataset) - train_size
+        self.train_dataset, self.test_dataset = random_split(dataset, [train_size, test_size])
+
+        self.train_loader = DataLoader(self.train_dataset, batch_size=32, shuffle=True)
+        self.test_loader = DataLoader(self.test_dataset, batch_size=32, shuffle=False)
+
+    def load_data(self, X_train, y_train, X_test, y_test):
+        # Convert NumPy arrays to PyTorch tensors
+        X_train_tensor = torch.Tensor(X_train)
+        y_train_tensor = torch.Tensor(y_train)
+        X_test_tensor = torch.Tensor(X_test)
+        y_test_tensor = torch.Tensor(y_test)
+
+        # Create PyTorch datasets
+        train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+        test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
+
+        # Create PyTorch data loaders
+        self.train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+        self.test_loader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False)
+    
+    def train(self):
+        # Define the loss function and optimizer
+        criterion = nn.BCELoss()
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+
+        # Train the model
+        for epoch in range(self.epochs):
+            running_loss = 0.0
+            for i, data in enumerate(self.train_loader, 0):
+                inputs, labels = data
+                optimizer.zero_grad()
+                outputs = self(inputs)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+                running_loss += loss.item()
+            print(f"Epoch {epoch + 1}, Loss: {running_loss / len(self.train_loader)}")
+
+    # Evaluate the model on the test set
+    def evaluate_model(self):
+        # Set the model to evaluation mode
+        self.eval()
+
+        # Initialize variables to keep track of predictions and labels
+        all_predictions = []
+        all_labels = []
+
+        # Iterate over the test loader
+        for inputs, labels in self.test_loader:
+            # Forward pass through the model
+            outputs = self(inputs)
+
+            # Convert the outputs to probabilities
+            probabilities = torch.sigmoid(outputs)
+
+            # Convert the outputs to predictions by taking the argmax
+            predictions = torch.argmax(outputs, dim=1)
+
+            # Append the predictions and labels to the respective lists
+            all_predictions.extend(predictions.tolist())
+            all_labels.extend(labels.tolist())
+
+        # Calculate the accuracy
+        accuracy = get_accuracy(all_labels, all_predictions)
+        
+        f1 = get_f1_score(all_labels, all_predictions)
+        print(f"[{self.model_name}]: F1 Macro Score: {f1}")
+
+        acc = get_accuracy(all_labels, all_predictions)
+        print(f"[{self.model_name}]: Accuracy: {acc}")
+
+        roc_auc = get_roc_score(all_labels, probabilities)
+        print(f"[{self.model_name}]: Area under ROC curve: {roc_auc}")
+
+        precision, recall = get_precision_recall(all_labels, all_predictions)
+        print(f"[{self.model_name}]: Precision: {precision}")
+        print(f"[{self.model_name}]: Recall: {recall}")
+
+        conf_mat = plot_confusion_matrix_display(all_labels, all_predictions)
+        roc_curve = plot_roc_curve(all_labels, probabilities)
+        
+        graphs_dict = {'conf_mat': conf_mat, 'roc_curve': roc_curve}
+        results_dict = {'f1': f1,
+                        'accuracy': acc,
+                        'roc_auc': roc_auc,
+                        'precision': precision,
+                        'recall': recall}
+
+        return results_dict, graphs_dict
+
 
 class MLAnalysis:
     def __init__(self, paramater_filepath=None):
@@ -24,6 +178,7 @@ class MLAnalysis:
         if paramater_filepath == None:
             self.parameter_filepath = os.getcwd() + "\\parameters.yaml"
         self.params = self.__load_parameters(paramater_filepath)
+        self.__set_seed()
 
         # self.models = {'svm': SVC(probability=True),
         #           'random_forest': RandomForestClassifier()}
@@ -33,12 +188,39 @@ class MLAnalysis:
         #                  'random_forest': ['random_forest']}
         self.model_gs_keys = {'svm': ['svm'],
                          'random_forest': ['random_forest']}
+        
+        self.nn_model = EEGClassifier()
 
 
     def __load_parameters(self, parameter_path):
         with open(parameter_path, 'r') as file:
             params = yaml.safe_load(file)
         return params
+    
+    def __set_seed(self):
+        random.seed(self.r_seed)
+        np.random.seed(self.r_seed)
+        torch.manual_seed(self.r_seed)
+
+    def run_nn_model(self):
+        print("Building data loaders...", end="")
+        self.nn_model.load_and_split_data(self.X, self.y, 0.8)
+        print("Done", end="\n")
+        # self.nn_model.load_data(self.X_train, self.y_train, self.X_test, self.y_test)
+
+        print("Starting model training...", end="")
+        self.nn_model.train()
+        print("Done", end="\n")
+
+        print("Evaluating model...", end="")
+        self.nn_model.evaluate_model()
+        print("Done", end="\n")
+
+    def prepare_data_nn(self, filepath):
+        flankerdata = load_flanker_data_from_pickle(filepath)
+        self.X, self.y = flankerdata.concatenate_data()
+        print("Data prepared successfully for Neural Network")
+        
 
     def prepare_data(self, filepath):
         flankerdata = load_flanker_data_from_pickle(filepath)
