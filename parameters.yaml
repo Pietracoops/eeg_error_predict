@@ -27,6 +27,7 @@ cv_count: 15
 
 # Neural Network
 model_name: nn_model_1
-batch_size: 32
-epochs: 100
-learning_rate: 0.001
+batch_size: 300
+epochs: 200
+learning_rate: 0.01
+K: 47

@@ -60,7 +60,10 @@ def plot_roc_curve(labels, probs):
     """
     Gets the ROC curve display object from scikit learn, which can be used to plot.
     """
-    roc = RocCurveDisplay.from_predictions(labels, probs[:, 1])
+    if isinstance(probs, list):
+        roc = RocCurveDisplay.from_predictions(labels, probs)
+    else:
+        roc = RocCurveDisplay.from_predictions(labels, probs[:, 1])
     return roc
 
 
@@ -68,8 +71,10 @@ def get_roc_score(labels, probs):
     """
     Get the area under the ROC curve.
     """
-
-    score = roc_auc_score(labels, probs[:, 1])
+    if isinstance(probs, list):
+        score = roc_auc_score(labels, probs)
+    else:
+        score = roc_auc_score(labels, probs[:, 1])
     return score
 
 
