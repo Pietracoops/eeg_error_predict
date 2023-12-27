@@ -4,7 +4,7 @@ from datetime import datetime
 from paths import PARAMS_DIR, CONFIG_PATH, PLOTS_PATH, RESULTS_PATH
 import json
 from pathlib import Path
-
+import torch
 
 def check_class_distribution(y):
     class_distribution = Counter(y)
@@ -12,7 +12,13 @@ def check_class_distribution(y):
     for label, count in class_distribution.items():
         print(f"Class {label}: {count} samples")
 
-def save_model_stats(model_name, params, results, conf_mat, roc_curve):
+
+def save_model(model, model_name):
+    # Save model to a pickle file
+    path = RESULTS_PATH / model_name
+    torch.save(model.state_dict(), f'{path}/model.pth')
+
+def save_model_stats(model_name, params, results, conf_mat, roc_curve, model=None):
     # Save model parameters and statistics to a text file
     root_path = RESULTS_PATH / model_name
     if not root_path.is_dir():  # Make sure plot dir exists.
@@ -35,6 +41,8 @@ def save_model_stats(model_name, params, results, conf_mat, roc_curve):
         now_string = now.strftime("%d_%m_%y_%H_%M_%S")
         save_plot(conf_mat, f"{model_name}_conf_mat_{now_string}.png", root_path)
         save_plot(roc_curve, f"{model_name}_roc_curve_{now_string}.png", root_path)
+        if model!=None:
+            save_model(model, model_name)
 
 def save_params(params, model_name=None):
     """

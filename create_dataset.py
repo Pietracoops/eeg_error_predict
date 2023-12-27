@@ -145,8 +145,8 @@ def machine_learning_nn(filename):
 
 now = datetime.now()
 now_string = now.strftime("%d_%m_%y_%H_%M_%S")
-# process_files(f"flanker_data_2_{now_string}.pkl")
-machine_learning_nn("flanker_data_2_20_12_23_15_44_15.pkl")
+# process_files(f"flanker_data_7_{now_string}.pkl")
+machine_learning_nn("flanker_data_7_24_12_23_17_35_04.pkl")
 
 
 

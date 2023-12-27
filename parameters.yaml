@@ -1,12 +1,12 @@
 
 # DATA PREP
 # Undersampling
-undersampling: 0
+undersampling: 0    # 1
 
 # Oversampling
 oversampling: 1
 os_strategy: SMOTE # [SMOTE, random]
-smote_ratio: 1.0
+smote_ratio: 0.5
 
 # Grid Search
 grid_search: 1
@@ -26,8 +26,11 @@ cross_validation: 0
 cv_count: 15
 
 # Neural Network
-model_name: nn_model_1
-batch_size: 300
-epochs: 200
-learning_rate: 0.01
-K: 47
+model_name: nn_model_1    #BEST: 0.5601410934744269
+batch_size: 100            # 100
+epochs: 50                # 50
+learning_rate: 0.0005     # 0.0003
+K: 90                     # 90
+fc_hidden_size: 128       # 128
+optimizer: Adam   # [Adam, Adagrad]         # Adam
+psd_usage: 0               # 0

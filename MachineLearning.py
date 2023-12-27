@@ -16,9 +16,12 @@ from sklearn.metrics import make_scorer
 
 from utils import save_params, load_params, check_pos_int_arg, check_pos_float_arg, save_plot, save_model_stats
 from plotting_metrics import (get_f1_score, plot_confusion_matrix_display,
-    plot_roc_curve, get_accuracy, get_roc_score, get_precision_recall, get_feature_importance)
+    plot_roc_curve, get_accuracy, get_roc_score, get_precision_recall, get_feature_importance, get_conf_indices)
 import numpy as np
 import random
+import csv
+import mne
+import matplotlib.pyplot as plt
 
 
 # pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
@@ -27,6 +30,27 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset, random_split
+import torch.nn.init as init
+
+from torch.utils.data import Dataset, DataLoader
+
+class CustomDataset(Dataset):
+    def __init__(self, eeg_data, labels, psd_data, device):
+        self.eeg_data = eeg_data
+        self.labels = labels
+        self.psd_data = psd_data
+        self.device = device
+
+    def __len__(self):
+        return len(self.eeg_data)
+
+    def __getitem__(self, idx):
+        eeg_sample = torch.Tensor(self.eeg_data[idx]).to(self.device)
+        psd_sample = torch.Tensor(self.psd_data[idx]).to(self.device)
+        label = torch.Tensor([self.labels[idx]]).to(self.device)
+
+        return {'eeg_data': eeg_sample, 'psd_data': psd_sample, 'label': label}
+
 
 # Define the neural network model
 class EEGClassifier(nn.Module):
@@ -41,15 +65,18 @@ class EEGClassifier(nn.Module):
             print("Using CPU")
         
         self.params = self.__load_parameters()
+        self.channels = None
+        self.freq = None
 
-        self.data_sample_size = 152
+        self.data_sample_size = 376
         self.K = self.params['K'] # Size of output layer - Play with this value
         self.in_channels = 62
         self.out_channels = 1
         self.kernel_size_1 = 3
         self.kernel_size_2, self.kernel_stride_2 = self.compute_kernel_stride(self.data_sample_size, self.K)
-        self.fc_hidden_size = 128
-        self.linear_input = (152 - self.kernel_size_2)//self.kernel_stride_2 + 1
+        self.fc_hidden_size = self.params['fc_hidden_size']
+        self.linear_input = (self.data_sample_size - self.kernel_size_2)//self.kernel_stride_2 + 1
+        self.psd_size = 74
 
         self.to(self.device) # move model to device
 
@@ -61,8 +88,20 @@ class EEGClassifier(nn.Module):
 
         self.conv1d_1 = nn.Conv1d(self.in_channels, self.out_channels, self.kernel_size_1, stride=1, padding=1).to(self.device)
         self.conv1d_2 = nn.Conv1d(self.out_channels, self.out_channels, self.kernel_size_2, stride=self.kernel_stride_2).to(self.device)
-        self.fc1 = nn.Linear(self.linear_input, self.fc_hidden_size).to(self.device)
+        self.conv1d_psd = nn.Conv1d(self.in_channels, self.out_channels, self.kernel_size_1, stride=1).to(self.device)
+
+        if self.params['psd_usage']==1:
+            self.fc1 = nn.Linear(self.linear_input + self.psd_size, self.fc_hidden_size).to(self.device)
+        else:
+            self.fc1 = nn.Linear(self.linear_input, self.fc_hidden_size).to(self.device)
         self.fc2 = nn.Linear(self.fc_hidden_size, 1).to(self.device)
+
+
+        # Initialize Weights
+        init.xavier_uniform_(self.fc1.weight)
+        init.xavier_uniform_(self.fc2.weight)
+        # init.uniform_(self.fc1.weight, a=0, b=1)  # You can adjust 'a' and 'b' based on your requirements
+        # init.uniform_(self.fc2.weight, a=0, b=1)  # You can adjust 'a' and 'b' based on your requirements
 
         # Print the values
         print("============ Neural Network Parameters ===============")
@@ -77,17 +116,22 @@ class EEGClassifier(nn.Module):
         print(f"Epochs: {self.params['epochs']}")
         print("============ Neural Network Parameters ===============")
 
-    def forward(self, x):
-        x = self.conv1d_1(x)
-        x = self.conv1d_2(x)
-        
-        # Flatten the output
-        x = x.view(x.size(0), -1)
+    def forward(self, eeg, psd=None):
+        eeg = self.conv1d_1(eeg)
+        eeg = self.conv1d_2(eeg)
+        eeg = eeg.view(eeg.size(0), -1)
+
+        if self.params['psd_usage']==1:
+            psd = self.conv1d_psd(psd)
+            psd = psd.view(psd.size(0), -1)
+            x = torch.cat((eeg, psd), dim=1)
+        else:
+            x = eeg
 
         # Fully connected layers
         x = F.relu(self.fc1(x))
         x = torch.sigmoid(self.fc2(x))  # binary classification (1 output node)
-        x = x.squeeze()
+        # x = x.squeeze()
         return x
     
     def __load_parameters(self):
@@ -113,18 +157,24 @@ class EEGClassifier(nn.Module):
         # If no match is found, return default values
         return 3, 1  # You can adjust these default values based on your specific needs
 
-    def load_and_split_data(self, eeg_data, labels, split_ratio=0.8):
+    def load_and_split_data(self, eeg_data, labels, psd_data, split_ratio=0.8):
+
         # Split the data into training and testing sets
         eeg_data = torch.Tensor(eeg_data).to(self.device)
         labels = torch.Tensor(labels).to(self.device)
+        psd_data = torch.Tensor(psd_data).to(self.device)
 
-        dataset = TensorDataset(eeg_data, labels)
+        dataset = TensorDataset(eeg_data, labels, psd_data)
         train_size = int(split_ratio * len(dataset))
         test_size = len(dataset) - train_size
-        self.train_dataset, self.test_dataset = random_split(dataset, [train_size, test_size])
 
-        self.train_loader = DataLoader(self.train_dataset, batch_size=32, shuffle=True)
-        self.test_loader = DataLoader(self.test_dataset, batch_size=32, shuffle=False)
+        self.custom_dataset = CustomDataset(eeg_data, labels, psd_data, self.device)
+
+        # Split the eeg data, labels, and psd_data into training and testing sets
+        self.train_dataset, self.test_dataset = random_split(self.custom_dataset, [train_size, test_size])
+
+        self.train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True)
+        self.test_loader = DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False)
 
     def load_data(self, X_train, y_train, X_test, y_test):
         # Convert NumPy arrays to PyTorch tensors
@@ -144,7 +194,10 @@ class EEGClassifier(nn.Module):
     def train_model(self):
         # Define the loss function and optimizer
         criterion = nn.BCELoss()
-        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        if self.params['optimizer'] == 'Adam':
+            optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        elif self.params['optimizer'] == 'Adagrad':
+            optimizer = optim.Adagrad(self.parameters(), lr=self.learning_rate)
 
         # Train the model
         for epoch in range(self.epochs):
@@ -152,9 +205,15 @@ class EEGClassifier(nn.Module):
             all_predictions = []
             all_labels = []
             for i, data in enumerate(self.train_loader, 0):
-                inputs, labels = data
+                inputs = data['eeg_data']
+                labels = data['label']
                 optimizer.zero_grad()
-                outputs = self(inputs)
+                # Forward pass through the model
+                if self.params['psd_usage'] == 1:
+                    psd = data['psd_data']
+                    outputs = self(inputs, psd)
+                else:
+                    outputs = self(inputs)
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
@@ -167,8 +226,60 @@ class EEGClassifier(nn.Module):
 
             
             # Calculate F1 score
-            f1 = get_f1_score(all_labels, all_predictions)
-            print(f"Epoch {epoch + 1}, Loss: {running_loss / len(self.train_loader)}, F1 Score: {f1}")
+            train_f1 = get_f1_score(all_labels, all_predictions)
+
+            # Validation phase (evaluate on the test set)
+            test_loss, test_f1 = self.evaluate_model_training(self.test_loader, criterion)
+
+            print(f"Epoch {epoch + 1}, Training Loss: {running_loss / len(self.train_loader)}, Training F1 Score: {train_f1}, Test Loss: {test_loss}, Test F1 Score: {test_f1}")
+
+    def evaluate_model_training(self, dataloader, criterion):
+        self.eval()  # Set the model to evaluation mode
+        running_loss = 0.0
+        all_predictions = []
+        all_labels = []
+
+        with torch.no_grad():
+            for data in dataloader:
+                inputs = data['eeg_data']
+                labels = data['label']
+                # Forward pass through the model
+                if self.params['psd_usage'] == 1:
+                    psd = data['psd_data']
+                    outputs = self(inputs, psd)
+                else:
+                    outputs = self(inputs)
+                loss = criterion(outputs, labels)
+                running_loss += loss.item()
+
+                # Convert outputs to binary predictions
+                predictions = torch.round(outputs)
+                all_predictions.extend(predictions.cpu().detach().numpy())
+                all_labels.extend(labels.cpu().detach().numpy())
+
+        # Calculate F1 score
+        f1 = get_f1_score(all_labels, all_predictions)
+
+        return running_loss / len(dataloader), f1
+
+    def write_to_csv(self, probabilities, labels, predictions, csv_filename):
+        # Check if the lengths of input lists are the same
+        if len(probabilities) != len(labels) or len(labels) != len(predictions):
+            raise ValueError("Input lists must have the same length")
+
+        # Combine the lists into a list of tuples
+        data = list(zip(probabilities, labels, predictions))
+
+        # Open the CSV file for writing
+        with open(csv_filename, 'w', newline='') as csvfile:
+            # Create a CSV writer
+            csv_writer = csv.writer(csvfile)
+
+            # Write header
+            csv_writer.writerow(['Probability', 'Label', 'Prediction'])
+
+            # Write data
+            csv_writer.writerows(data)
 
     # Evaluate the model on the test set
     def evaluate_model(self):
@@ -179,13 +290,23 @@ class EEGClassifier(nn.Module):
         all_predictions = []
         all_probabilities = []
         all_labels = []
+        all_inputs = []
 
-        threshold = 0.5
+        threshold = 0.6
+
+        info = mne.create_info(ch_names=self.channels, sfreq=256, ch_types='eeg')
 
         # Iterate over the test loader
-        for inputs, labels in self.test_loader:
+        for data in self.test_loader:
+            inputs = data['eeg_data']
+            labels = data['label'].flatten()
+            
             # Forward pass through the model
-            outputs = self(inputs)
+            if self.params['psd_usage'] == 1:
+                psd = data['psd_data']
+                outputs = self(inputs, psd)
+            else:
+                outputs = self(inputs)
 
             # Convert the outputs to probabilities
             probabilities = torch.sigmoid(outputs)
@@ -194,10 +315,12 @@ class EEGClassifier(nn.Module):
             binary_predictions = (outputs > threshold).int()
 
             # Append the predictions and labels to the respective lists
-            all_predictions.extend(binary_predictions.tolist())
+            all_inputs.extend(inputs)
+            all_predictions.extend(binary_predictions.flatten().tolist())
             all_probabilities.extend(probabilities.tolist())
             all_labels.extend(labels.tolist())
-        
+
+        self.write_to_csv(all_probabilities, all_labels, all_predictions, "testing.csv")
         f1 = get_f1_score(all_labels, all_predictions)
         print(f"[{self.model_name}]: F1 Macro Score: {f1}")
 
@@ -220,6 +343,37 @@ class EEGClassifier(nn.Module):
                         'roc_auc': roc_auc,
                         'precision': precision,
                         'recall': recall}
+        
+        # fp, fn, tp, tn = get_conf_indices(all_labels, all_predictions)
+        #
+        # fp_array = [all_inputs[i] for i in fp]
+        # fn_array = [all_inputs[i] for i in fn]
+        # tp_array = [all_inputs[i] for i in tp]
+        # tn_array = [all_inputs[i] for i in tn]
+        #
+        # for i in range(0,10):
+        #     # Create an EpochsArray
+        #     epochs_from_array = mne.EpochsArray(tp_array[i].cpu().reshape(1, 62, 376), info)
+        #     epochs_from_array.plot(title=f'TRUE POSITIVE {i}: - Pred: 1 - True: 1', scalings='auto')  # Plot the epoch
+        #     plt.show()  # Display the plot
+        #
+        # for i in range(0,10):
+        #     # Create an EpochsArray
+        #     epochs_from_array = mne.EpochsArray(tn_array[i].cpu().reshape(1, 62, 376), info)
+        #     epochs_from_array.plot(title=f'TRUE NEGATIVE {i} - Pred: 0 - True: 0', scalings='auto')  # Plot the epoch
+        #     plt.show()  # Display the plot
+        #
+        # for i in range(0,10):
+        #     # Create an EpochsArray
+        #     epochs_from_array = mne.EpochsArray(fp_array[i].cpu().reshape(1, 62, 376), info)
+        #     epochs_from_array.plot(title=f'FALSE POSITIVE {i} - Pred: 0 - True: 1', scalings='auto')  # Plot the epoch
+        #     plt.show()  # Display the plot
+        #
+        # for i in range(0,10):
+        #     # Create an EpochsArray
+        #     epochs_from_array = mne.EpochsArray(fn_array[i].cpu().reshape(1, 62, 376), info)
+        #     epochs_from_array.plot(title=f'FALSE NEGATIVE {i} - Pred: 1 - True: 0', scalings='auto')  # Plot the epoch
+        #     plt.show()  # Display the plot
 
         return results_dict, graphs_dict
 
@@ -255,8 +409,10 @@ class MLAnalysis:
         torch.manual_seed(self.r_seed)
 
     def run_nn_model(self):
+        self.nn_model.channels = self.channels
         print("Building data loaders...", end="")
-        self.nn_model.load_and_split_data(self.X, self.y, 0.8)
+        self.nn_model.load_and_split_data(self.X, self.y, self.psd, 0.8)
+
         print("Done", end="\n")
         # self.nn_model.load_data(self.X_train, self.y_train, self.X_test, self.y_test)
 
@@ -265,12 +421,21 @@ class MLAnalysis:
         print("Done", end="\n")
 
         print("Evaluating model...", end="")
-        self.nn_model.evaluate_model()
+        results_dict, graph_dict = self.nn_model.evaluate_model()
         print("Done", end="\n")
+        save_model_stats(f"{self.nn_model.model_name}_{results_dict['f1']}",
+                            self.params, results_dict,
+                            graph_dict['conf_mat'],
+                            graph_dict['roc_curve'],
+                            self.nn_model)
+
 
     def prepare_data_nn(self, filepath):
         flankerdata = load_flanker_data_from_pickle(filepath)
-        self.X, self.y = flankerdata.concatenate_data()
+        
+        self.channels = flankerdata.participants[1].channels
+        self.channels = [s for s in self.channels if s not in ('Cz', 'ECG1')]
+        self.X, self.y, self.psd = flankerdata.concatenate_data()
         print("Data prepared successfully for Neural Network")
         
 

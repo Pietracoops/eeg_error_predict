@@ -3,6 +3,8 @@ import numpy as np
 import mne
 from pathlib import Path
 from sklearn.model_selection import GroupShuffleSplit
+from mne.preprocessing import ICA, corrmap, create_ecg_epochs, create_eog_epochs
+import matplotlib.pyplot as plt
 
 def load_flanker_data_from_pickle(filename):
     with open(filename, 'rb') as file:
@@ -94,20 +96,35 @@ class FlankerData:
     def concatenate_data(self):
         all_eeg_data = []
         all_labels = []
+        all_psd = []
 
         for participant_data in self.participants.values():
             eeg_data = participant_data.X
             labels = participant_data.Y
+            psd = participant_data.psd
 
             all_eeg_data.append(eeg_data)
             all_labels.extend(labels)
+            all_psd.append(psd)
 
         X = np.concatenate(all_eeg_data, axis=0)
         y = np.array(all_labels)
+        Z_psd = np.concatenate(all_psd, axis=0)
 
-        return X, y
+        return X, y, Z_psd
 
-    def process_eeg_data(self, raw):
+    def process_eeg_data(self, raw, plot=False):
+        # Visualize raw data before processing
+        if plot:
+            raw.plot(title='Raw Data Before Processing', scalings=0.00005, show=True)
+
+        # ecg_evoked = create_ecg_epochs(raw).average()
+        # ecg_evoked.apply_baseline(baseline=(None, -0.2))
+        # ecg_evoked.plot_joint()
+
+        # remove slow drifts
+        filt_raw = raw.copy().filter(l_freq=1.0, h_freq=None)
+
         # Define the filter settings
         low_freq = 1.0  # 1Hz
         high_freq = None  # None for high-pass filter
@@ -115,22 +132,64 @@ class FlankerData:
         fir_design = 'firwin'  # FIR filter design method
 
         # Apply high-pass FIR filter
-        raw.filter(l_freq=low_freq, h_freq=high_freq, filter_length=filter_length, fir_design=fir_design)
+        filt_raw.filter(l_freq=low_freq, h_freq=high_freq, filter_length=filter_length, fir_design=fir_design)
 
         # Define the line noise frequency to filter out (50 Hz for European systems)
         line_freq = 50.0
 
         # Apply a notch filter to remove the specified line noise frequency
-        raw.notch_filter(freqs=[line_freq], fir_design='firwin')
+        filt_raw.notch_filter(freqs=[line_freq], fir_design='firwin')
 
         # RESAMPLE TO 250Hz
         # Define the target sampling frequency (e.g., 250 Hz)
         target_sf = 250
 
         # Downsample the raw data
-        raw.resample(sfreq=target_sf)
+        filt_raw.resample(sfreq=target_sf)
 
-        return raw
+        # Visualize raw data after processing
+        # raw.plot(title='Raw Data After Processing', scalings=369.5, show=True)
+
+        # Perform ICA to remove artifacts
+        ica = ICA(n_components=25, random_state=97, max_iter=800)
+        ica.fit(filt_raw)
+
+        if plot:
+            ica.plot_sources(filt_raw, show_scrollbars=True)
+
+
+        ecg_indices, ecg_scores = ica.find_bads_ecg(raw, method="correlation", threshold="auto")
+        ica.exclude = ecg_indices
+
+        # # barplot of ICA component "ECG match" scores
+        # ica.plot_scores(ecg_scores)
+
+        # # plot diagnostics
+        # ica.plot_properties(raw, picks=ecg_indices)
+
+        # # blinks
+        # ica.plot_overlay(filt_raw, exclude=[0], picks="eeg")
+
+        explained_var_ratio = ica.get_explained_variance_ratio(filt_raw)
+        for channel_type, ratio in explained_var_ratio.items():
+            print(
+                f"Fraction of {channel_type} variance explained by all components: " f"{ratio}"
+            )
+
+        # Plot ICA components to inspect for artifacts
+        # ica.plot_components()
+
+        # Automatically select components for removal (adjust the threshold as needed)
+        ica.exclude = [0, 1]  # specify components to remove
+        raw_cleaned = filt_raw.copy()
+        ica.apply(raw_cleaned)
+        
+        # Visualize cleaned raw data
+        if plot:
+            raw_cleaned.plot(title='Cleaned Raw Data', scalings=0.00005, show=True)
+
+        return raw_cleaned
+
 
         # # REJECT CHANNELS
         # # Automatic channel rejection and interpolation are performed based on 2 standard deviations for EEG channels.
@@ -195,7 +254,6 @@ class FlankerData:
                                    baseline=None,
                                    preload=True)
 
-
                 # Append the epoch to the list
                 epochs_list.append(epoch)
                 labels.append(label)
@@ -203,7 +261,7 @@ class FlankerData:
             # Concatenate the list of epochs into a single Epochs object
             epochs = mne.concatenate_epochs(epochs_list)
 
-            return epochs, labels
+            return epochs, labels, epochs_list
 
         if option == 2:
             # Define epochs starting right after events '241' and '242'
@@ -255,9 +313,62 @@ class FlankerData:
 
             # Concatenate the list of epochs into a single Epochs object
             epochs = mne.concatenate_epochs(epochs_list)
-            psd = epochs.compute_psd(method='multitaper', fmin=0, fmax=50)
+            # psd = epochs.compute_psd(method='multitaper', fmin=0, fmax=50)
 
-            return epochs, labels, psd
+            return epochs, labels, epochs_list
+
+        if option == 3:
+           # Define epochs starting right after events '241' and '242'
+            tmin, tmax = -1.0, 0.5  # define the time window for each epoch
+
+            # Find the indices of events '241' and '242'
+            event_241_indices = np.where(events[:, -1] == event_id['FLANKER_Stimulus_cong'])[0]
+            event_242_indices = np.where(events[:, -1] == event_id['FLANKER_Stimulus_incong'])[0]
+
+            # Concatenate the indices of events '241' and '242'
+            start_indices = np.concatenate([event_241_indices, event_242_indices])
+
+            # Create epochs for each start index
+            epochs_list = []
+            labels = []
+
+            for start_index in start_indices:
+                # Determine the label based on the event following '241' or '242'
+                next_event = events[start_index + 1, -1]
+                if next_event == event_id['FLANKER_Response_Correct_cong']:
+                    label = 1
+                elif next_event == event_id['FLANKER_Response_Incorrect_cong']:
+                    label = 0
+                elif next_event == event_id['FLANKER_Response_Correct_incong']:
+                    label = 1
+                elif next_event == event_id['FLANKER_Response_Incorrect_incong']:
+                    label = 0
+                elif next_event == event_id['FLANKER_Missed_Response_Feedback_cong']:
+                    label = 0
+                elif next_event == event_id['FLANKER_Missed_Response_Feedback_incong']:
+                    label = 0
+                else:
+                    label = 'Unknown'
+
+                # Create an epoch for the specified time window
+                epoch = mne.Epochs(raw, events=np.array([events[start_index]]),
+                                   event_id=None,
+                                   tmin=tmin,
+                                   tmax=tmax,
+                                   baseline=None,
+                                   preload=True)
+
+
+                # Append the epoch to the list
+                epochs_list.append(epoch)
+                labels.append(label)
+
+            # Concatenate the list of epochs into a single Epochs object
+            epochs = mne.concatenate_epochs(epochs_list)
+            # psd = epochs.compute_psd(method='multitaper', fmin=0, fmax=50)
+
+            return epochs, labels, epochs_list
+
 
     def _process_participant(self, filepath, id):
 
@@ -268,12 +379,12 @@ class FlankerData:
         # eeg_file = Path("C:\\Users\\massimo\Desktop\\7413650\\Dataset\\COG-BCI\\sub-01\\ses-S1\\eeg\\Flanker.set")
         # fdt_file = Path("C:\\Users\\massimo\Desktop\\7413650\\Dataset\\COG-BCI\\sub-01\\ses-S1\\eeg\\Flanker.fdt")
         # eeg_file = 'path/to/your/file.set'
-        participant.raw = mne.io.read_raw_eeglab(str(filepath), preload=True) # FDT file also loaded if same directory
+        # participant.raw = mne.io.read_raw_eeglab(str(filepath), preload=True) # FDT file also loaded if same directory
+        raw = mne.io.read_raw_eeglab(str(filepath), preload=True)
+        participant.channels = raw.ch_names
 
-        participant.channels = participant.raw.ch_names
-
-        processed_raw = self.process_eeg_data(participant.raw)
-        participant.raw_processed = processed_raw
+        processed_raw = self.process_eeg_data(raw)
+        # participant.raw_processed = processed_raw
 
         # Specify the event IDs and descriptions
         event_id = {
@@ -338,9 +449,113 @@ class FlankerData:
             '25322': 25322,
         }
 
+        # Initialize dropped epochs from participants 1 to 87
+        dropped_epochs = {
+            1:[18,44,54],
+            2:[15,28,56,87],
+            3:[66],
+            4:[97,101],
+            5:[17, 20, 34, 60, 98, 102, 108],
+            6:[1,6,13,21,22,24,27,28,42,96,98,115,118],
+            7:[],
+            8:[],
+            9:[1],
+            10:[28,72,86,97,107],
+            11:[],
+            12:[107],
+            13:[],
+            14:[],
+            15:[],
+            16:[27, 48, 98],
+            17:[31, 40, 60],
+            18:[46],
+            19:[],
+            20:[88],
+            21:[68],
+            22:[],
+            23:[],
+            24:[],
+            25:[],
+            26:[],
+            27:[],
+            28:[],
+            29:[],
+            30:[],
+            31:[],
+            32:[],
+            33:[],
+            34:[],
+            35:[],
+            36:[],
+            37:[],
+            38:[],
+            39:[],
+            40:[],
+            41:[],
+            42:[],
+            43:[],
+            44:[],
+            45:[],
+            46:[],
+            47:[],
+            48:[],
+            49:[],
+            50:[],
+            51:[],
+            52:[],
+            53:[],
+            54:[],
+            55:[],
+            56:[],
+            57:[],
+            58:[],
+            59:[],
+            60:[],
+            61:[],
+            62:[],
+            63:[],
+            64:[],
+            65:[],
+            66:[],
+            67:[],
+            68:[],
+            69:[],
+            70:[],
+            71:[],
+            72:[],
+            73:[],
+            74:[],
+            75:[],
+            76:[],
+            77:[],
+            78:[],
+            79:[],
+            80:[],
+            81:[],
+            82:[],
+            83:[],
+            84:[],
+            85:[],
+            86:[],
+            87:[]
+        }
+
         # Option 1 = 0.5 seconds after stimulus
         # Option 2 = 0.5 seconds before action
-        epochs, labels, psd = self._get_events(processed_raw, inverted_event_id, event_id, 2)
+        epochs, labels, epochs_list = self._get_events(processed_raw, inverted_event_id, event_id, 3)
+
+        # Cycle through each epoch and visualize them:
+        # if id >= 22:
+        #     for i in range(len(epochs_list)):
+        #         # continue
+        #         epochs_list[i].plot(title=f'Epoch {i} - Label: {labels[i]}', scalings='auto')  # Plot the epoch
+        #         plt.show()  # Display the plot
+
+        # Filter out visually inspected dropped epochs
+        filtered_epochs_list = [value for index, value in enumerate(epochs_list) if index not in dropped_epochs[id]]
+        filtered_labels_list = [value for index, value in enumerate(labels) if index not in dropped_epochs[id]]
+        # psd = np.delete(psd, dropped_epochs[id], axis=0)
+        epochs = mne.concatenate_epochs(filtered_epochs_list)
 
         # List of channels to keep
         ignored_channels = ['Cz', 'ECG1']
@@ -351,18 +566,32 @@ class FlankerData:
 
         # Pick the desired channels
         epochs_cleaned = epochs.pick_channels(channels_to_keep)
-        psd_cleaned = psd.pick_channels(channels_to_keep)
+
+        psd = epochs_cleaned.compute_psd(method='multitaper', fmin=0, fmax=50)
 
         print(f"EEG Channels: {epochs.ch_names}")
         print(f"PSD Channels: {psd.ch_names}")
         eeg_data_extracted = epochs_cleaned.get_data()
-        psd_data_extracted = psd_cleaned.get_data()
+        psd_data_extracted = psd.get_data()
+
+
+        # Drop epochs based on z-scores
+        z_threshold = 1.0
+        z_scores = (eeg_data_extracted - np.mean(eeg_data_extracted, axis=2, keepdims=True)) / np.std(eeg_data_extracted, axis=2, keepdims=True)
+        bad_epochs = np.any(np.abs(z_scores) > z_threshold, axis=(1, 2))
+        # epochs_cleaned.drop(bad_epochs)
+        # eeg_data_extracted = epochs_cleaned.get_data()
+
+        # Truncate the data to the desired length
+        # truncated_eeg_data = eeg_data_extracted[:, :, :375]
 
         # Extract data and labels for machine learning
-        participant.X = np.concatenate([eeg_data_extracted, psd_data_extracted], axis=2)
-        participant.Y = labels  # Event labels
-        participant.psd = psd
-        participant.epochs = epochs_cleaned
+        # participant.X = np.concatenate([eeg_data_extracted, psd_data_extracted], axis=2) # Concat psd with eeg
+        # participant.X = eeg_data_extracted
+        participant.X = z_scores
+        participant.Y = filtered_labels_list  # Event labels
+        participant.psd = psd_data_extracted
+        # participant.epochs = epochs_cleaned
         print(f"Done processing participant {participant.id}")
         return participant
 

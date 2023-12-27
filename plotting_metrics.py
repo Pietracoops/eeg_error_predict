@@ -5,6 +5,26 @@ from sklearn.metrics import (f1_score, accuracy_score, recall_score, precision_s
                              ConfusionMatrixDisplay,
                              precision_recall_curve, PrecisionRecallDisplay, roc_curve, RocCurveDisplay, roc_auc_score)
 
+def get_conf_indices(y_true, y_pred):
+    """
+    Get indices of false positives (FP) and false negatives (FN).
+
+    Parameters:
+    - y_true: true labels (ground truth)
+    - y_pred: predicted labels
+
+    Returns:
+    - fp_indices: indices of false positives
+    - fn_indices: indices of false negatives
+    """
+    assert len(y_true) == len(y_pred), "Input arrays must have the same length"
+
+    tp_indices = [i for i, (true_label, pred_label) in enumerate(zip(y_true, y_pred)) if true_label == 1 and pred_label == 1]
+    tn_indices = [i for i, (true_label, pred_label) in enumerate(zip(y_true, y_pred)) if true_label == 0 and pred_label == 0]
+    fp_indices = [i for i, (true_label, pred_label) in enumerate(zip(y_true, y_pred)) if true_label == 0 and pred_label == 1]
+    fn_indices = [i for i, (true_label, pred_label) in enumerate(zip(y_true, y_pred)) if true_label == 1 and pred_label == 0]
+
+    return fp_indices, fn_indices, tp_indices, tn_indices
 
 def get_f1_score(labels, preds, average='macro'):
     """
