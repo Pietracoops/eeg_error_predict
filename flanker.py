@@ -5,6 +5,7 @@ from pathlib import Path
 from sklearn.model_selection import GroupShuffleSplit
 from mne.preprocessing import ICA, corrmap, create_ecg_epochs, create_eog_epochs
 import matplotlib.pyplot as plt
+from utils import plot_heatmap
 
 def load_flanker_data_from_pickle(filename):
     with open(filename, 'rb') as file:
@@ -27,6 +28,7 @@ class FlankerData:
         self.participants = {}
         self.num_participants = 0
         self.epochs = None
+        self.dropped_epochs = 0
 
     def add_participant(self, participant_id, eeg_data, labels):
         participant = Participant(participant_id, eeg_data, labels)
@@ -576,9 +578,25 @@ class FlankerData:
 
 
         # Drop epochs based on z-scores
-        z_threshold = 1.0
+        z_threshold = 5.0
         z_scores = (eeg_data_extracted - np.mean(eeg_data_extracted, axis=2, keepdims=True)) / np.std(eeg_data_extracted, axis=2, keepdims=True)
+        z_scores_mean = np.mean(z_scores, axis=2)
         bad_epochs = np.any(np.abs(z_scores) > z_threshold, axis=(1, 2))
+        z_threshold_mean = 2.5e-8
+        bad_epochs_mean = np.any(np.abs(z_scores_mean) > z_threshold_mean, axis=(1))
+        dropped_epochs_count = np.count_nonzero(bad_epochs)
+        bad_epochs = ~np.array(bad_epochs)
+        z_scores = z_scores[bad_epochs]
+        filtered_labels_list = [filtered_labels_list[i] for i in range(len(filtered_labels_list)) if bad_epochs[i]]
+        psd_data_extracted = psd_data_extracted[bad_epochs]
+        self.dropped_epochs += dropped_epochs_count
+        print(f"Dropping {dropped_epochs_count} epochs based on mean z-score of {z_threshold} with total dropped epochs at {self.dropped_epochs}")
+
+        
+        # fig, axs = plt.subplots(2, 2, figsize=(10, 8))
+        # im_fp = plot_heatmap(axs[0,0], z_scores_mean, 'Participant Epochs Z-score Mean')
+        # cbar_fp_2 = fig.colorbar(im_fp, ax=axs[0, 0])
+        # plt.show()
         # epochs_cleaned.drop(bad_epochs)
         # eeg_data_extracted = epochs_cleaned.get_data()
 

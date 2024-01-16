@@ -21,7 +21,7 @@ from sklearn.metrics import (f1_score, accuracy_score, recall_score, precision_s
                             precision_recall_curve, PrecisionRecallDisplay, roc_curve, RocCurveDisplay, roc_auc_score, auc)
 
 
-from MachineLearning import MLAnalysis
+from MachineLearning import MLAnalysis, OptunaTuning, EEGTransformer
 
 def find_files_by_name(directory, file_name):
     file_list = []
@@ -140,13 +140,37 @@ def machine_learning_nn(filename):
     ml_obj = MLAnalysis(parameter_path)
     ml_obj.prepare_data_nn(data_path)
 
-    ml_obj.run_nn_model()
+    ml_obj.run_nn_model(params=None, save=True)
     print("Done")
+
+def machine_learning_nn_optuna(filename):
+    print("Running machine learning with Optuna for Neural Network...")
+    data_path = os.getcwd() + "\\" + filename
+
+    ot = OptunaTuning()
+    ot.start_study(30, filename)
+
+    print("Done")
+
+def machine_learning_transformer(filename):
+    print("Running machine learning with transformer...")
+    data_path = os.getcwd()
+    parameter_path = os.getcwd() + "\\parameters.yaml"
+
+    ml_obj = MLAnalysis(parameter_path)
+    ml_obj.prepare_data_nn(data_path)
+    ml_obj.run_transformer_model(params=None, save=True)
+
+    print("Done Transformer Model")
 
 now = datetime.now()
 now_string = now.strftime("%d_%m_%y_%H_%M_%S")
-# process_files(f"flanker_data_7_{now_string}.pkl")
-machine_learning_nn("flanker_data_7_24_12_23_17_35_04.pkl")
+# process_files(f"flanker_data_13_{now_string}.pkl")
+# machine_learning_nn("flanker_data_9_-4_7-30_12_23_16_23_41.pkl")
+# machine_learning_nn("flanker_data_10-4_5-_30_12_23_17_22_11.pkl")
+# machine_learning_nn("flanker_data_12_02_01_24_15_30_25.pkl")
+machine_learning_transformer("flanker_data_12_02_01_24_15_30_25.pkl")
+# machine_learning_nn_optuna("flanker_data_12_02_01_24_15_30_25.pkl")
 
 
 

@@ -1,3 +1,6 @@
+# Database Name
+database_name: 'flanker_data_12_02_01_24_15_30_25.pkl'
+data_split: 0.8
 
 # DATA PREP
 # Undersampling
@@ -27,10 +30,43 @@ cv_count: 15
 
 # Neural Network
 model_name: nn_model_1    #BEST: 0.5601410934744269
-batch_size: 100            # 100
-epochs: 50                # 50
-learning_rate: 0.0005     # 0.0003
-K: 90                     # 90
-fc_hidden_size: 128       # 128
+batch_size: 368            # 100
+epochs: 75                # 50
+learning_rate: 0.005084237414519601     # 0.0003
+K: 91                     # 90
+fc_hidden_size: 1024       # 128
 optimizer: Adam   # [Adam, Adagrad]         # Adam
+batch_norm: 1             # 1
+activation: leaky_relu          # relu, elu, selu, leaky_relu
+dropout_prob: 0.3         # 0
 psd_usage: 0               # 0
+
+# # Neural Network
+# model_name: nn_model_1    #BEST: 0.5601410934744269
+# batch_size: 638            # 100
+# epochs: 41                # 50
+# learning_rate: 0.0073341     # 0.0003
+# K: 87                     # 90
+# fc_hidden_size: 712       # 128
+# optimizer: Adagrad   # [Adam, Adagrad]         # Adam
+# psd_usage: 0               # 0
+
+# Transformer Parameters
+tr_optuna: 1 # Enable optuna search
+tr_model_name: tr_model_1                   #BEST: 0.5601410934744269
+tr_batch_size: 50                          # 100
+tr_epochs: 5                               # 50
+tr_learning_rate: 0.0002                    # 0.0003
+tr_c_dim: 2                                 # 0.0003
+tr_b1: 0.5                                  # 90
+tr_b2: 0.999                                # 128
+tr_emb_size: 20                                # 128
+tr_depth: 4                                    # 128
+tr_n_classes: 1                                # 128
+tr_num_heads: 10
+tr_drop_p: 0.5
+tr_forward_expansion: 4
+tr_forward_drop_p: 0.5
+tr_save_model_every_n_epoch: 1
+
+

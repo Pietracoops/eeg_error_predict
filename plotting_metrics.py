@@ -3,7 +3,29 @@ from sklearn.inspection import permutation_importance
 from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.metrics import (f1_score, accuracy_score, recall_score, precision_score, confusion_matrix,
                              ConfusionMatrixDisplay,
-                             precision_recall_curve, PrecisionRecallDisplay, roc_curve, RocCurveDisplay, roc_auc_score)
+                             precision_recall_curve, PrecisionRecallDisplay, roc_curve, RocCurveDisplay, roc_auc_score,
+                             cohen_kappa_score)
+
+def get_kappa_score(true_labels, predicted_labels):
+    """
+    Calculate the Kappa score given true labels and predicted labels.
+
+    Parameters:
+    - true_labels: List or array of true labels
+    - predicted_labels: List or array of predicted labels
+
+    Returns:
+    - kappa_score: The computed Kappa score
+    """
+
+    # Kappa score < 0: Indicates agreement worse than random chance.
+    # 0 <= Kappa score <= 0.2: Slight agreement.
+    # 0.2 < Kappa score <= 0.4: Fair agreement.
+    # 0.4 < Kappa score <= 0.6: Moderate agreement.
+    # 0.6 < Kappa score <= 0.8: Substantial agreement.
+    # 0.8 < Kappa score <= 1: Almost perfect agreement.
+    kappa_score = cohen_kappa_score(true_labels, predicted_labels)
+    return kappa_score
 
 def get_conf_indices(y_true, y_pred):
     """
