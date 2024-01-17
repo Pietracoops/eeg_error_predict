@@ -53,16 +53,16 @@ psd_usage: 0               # 0
 
 # Transformer Parameters
 tr_optuna: 1 # Enable optuna search
-tr_model_name: tr_model_1                   #BEST: 0.5601410934744269
-tr_batch_size: 50                          # 100
-tr_epochs: 5                               # 50
-tr_learning_rate: 0.0002                    # 0.0003
-tr_c_dim: 2                                 # 0.0003
-tr_b1: 0.5                                  # 90
-tr_b2: 0.999                                # 128
-tr_emb_size: 20                                # 128
-tr_depth: 4                                    # 128
-tr_n_classes: 1                                # 128
+tr_model_name: tr_model_1                 
+tr_batch_size: 5                          
+tr_epochs: 5                              
+tr_learning_rate: 0.0002                  
+tr_c_dim: 2                               
+tr_b1: 0.5                                
+tr_b2: 0.999                              
+tr_emb_size: 20                           
+tr_depth: 4                               
+tr_n_classes: 1                           
 tr_num_heads: 10
 tr_drop_p: 0.5
 tr_forward_expansion: 4
