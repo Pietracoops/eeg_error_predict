@@ -7,8 +7,9 @@ set "setup_directory=%current_directory%\setup"
 
 rem Check if the setup directory exists
 if not exist "%setup_directory%" (
-    echo Error: Setup directory not found!
-    exit /b 1
+    echo Setup directory not found! Creating it...
+    mkdir %setup_directory%
+    call download_setup.bat
 )
 
 rem Find CUDA installer in the setup directory
