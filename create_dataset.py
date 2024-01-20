@@ -14,12 +14,6 @@ from sklearn.ensemble import RandomForestClassifier
 
 import matplotlib.pyplot as plt
 
-from preprocessing import oversample_classes, undersample_classes
-
-from utils import check_class_distribution
-from sklearn.metrics import (f1_score, accuracy_score, recall_score, precision_score, confusion_matrix, ConfusionMatrixDisplay,
-                            precision_recall_curve, PrecisionRecallDisplay, roc_curve, RocCurveDisplay, roc_auc_score, auc)
-
 
 from MachineLearning import MLAnalysis, OptunaTuning, EEGTransformer
 

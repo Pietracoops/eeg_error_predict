@@ -53,6 +53,7 @@ psd_usage: 0               # 0
 
 # Transformer Parameters
 tr_optuna: 1 # Enable optuna search
+tr_optuna_trials: 30
 tr_model_name: tr_model_1                 
 tr_batch_size: 5                          
 tr_epochs: 5                              

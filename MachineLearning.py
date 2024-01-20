@@ -4,6 +4,7 @@ from datetime import datetime as dt
 import random
 import csv
 import time
+import logging
 
 # Third-party Libraries
 import numpy as np
@@ -259,6 +260,7 @@ class EEGTransformer():
                                                                                                          split_ratio)
 
     def start_optuna_study(self, trials):
+        logging.basicConfig(filename='optuna_log.txt', level=logging.INFO)
         self.study = optuna.create_study(direction='maximize')
 
         # Read parameters from file
@@ -274,10 +276,10 @@ class EEGTransformer():
         learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2)
         self.lr = learning_rate
 
-        b1 = trial.suggest_float('b1', 0.9, 0.999)
+        b1 = trial.suggest_float('b1', 0.7, 0.999)
         self.b1 = b1
 
-        b2 = trial.suggest_float('b2', 0.999, 0.9999)
+        b2 = trial.suggest_float('b2', 0.7, 0.9999)
         self.b2 = b2
         
         epochs = trial.suggest_int('epochs', 10, 100)
@@ -286,9 +288,15 @@ class EEGTransformer():
         batch_size = trial.suggest_int('batch_size', 32, 50)
         self.batch_size = batch_size
 
+        logging.info(f"Optuna parameters for trial {trial.number}: learning_rate={learning_rate}, b1={b1}, b2={b2}, epochs={epochs}, batch_size={batch_size}")
+        print(f"Optuna parameters for trial {trial.number}: learning_rate={learning_rate}, b1={b1}, b2={b2}, epochs={epochs}, batch_size={batch_size}")
+        # print(f"Optuna parameters: learning_rate={learning_rate}, b1={b1}, b2={b2}, epochs={epochs}, batch_size={batch_size}")
+
         # Run model
         self.train_model()
         results_dict, graph_dict = self.evaluate_model()
+        logging.info(f"Final results: {results_dict}")
+        print(f"Final results: {results_dict}")
 
         f1 = results_dict['f1']
 
@@ -296,6 +304,8 @@ class EEGTransformer():
 
 
     def train_model(self, save=False):
+
+        self.load_and_split_data(self.X, self.y, self.psd, self.params['data_split'])
 
         # Optimizers
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, betas=(self.b1, self.b2))
@@ -887,14 +897,16 @@ class MLAnalysis:
         model_identifier = f"{transformer.name}_{params['tr_model_name']}_{now_string}"
         transformer.model_identifier = model_identifier
         
-        print("Building data loaders...", end="")
-        transformer.load_and_split_data(self.X, self.y, self.psd, self.params['data_split'])
-        print("Done", end="\n")
-
+        # print("Building data loaders...", end="")
+        # transformer.load_and_split_data(self.X, self.y, self.psd, self.params['data_split'])
+        # print("Done", end="\n")
+        transformer.X = self.X
+        transformer.y = self.y
+        transformer.psd = self.psd
 
         if params['tr_optuna']==1:
-            print("Starting Optuna model training...", end="\n")
-            transformer.start_optuna_study(trials=30)
+            print(f"Starting Optuna model training with {params['tr_optuna_trials']} trials...", end="\n")
+            transformer.start_optuna_study(trials=params['tr_optuna_trials'])
             print("Optuna model training Done", end="\n")
         else:
             print("Starting model training...", end="\n")
