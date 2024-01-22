@@ -179,6 +179,8 @@ class OptunaTuning():
 class EEGTransformer():
     def __init__(self, parameters=None):
 
+        torch.cuda.empty_cache()
+
         # Check if a GPU is available
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         if self.device.type == 'cuda':
@@ -259,52 +261,9 @@ class EEGTransformer():
                                                                                                          self.batch_size, 
                                                                                                          split_ratio)
 
-    def start_optuna_study(self, trials):
-        logging.basicConfig(filename='optuna_log.txt', level=logging.INFO)
-        self.study = optuna.create_study(direction='maximize')
-
-        # Read parameters from file
-        self.params = load_parameters()
-
-        self.study.optimize(self.objective, n_trials=trials)
-        print('Best hyperparameters: ', self.study.best_params)
-
-    def objective(self, trial):
-
-        # Modify params
-        self.__init__(self.params)
-        learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2)
-        self.lr = learning_rate
-
-        b1 = trial.suggest_float('b1', 0.7, 0.999)
-        self.b1 = b1
-
-        b2 = trial.suggest_float('b2', 0.7, 0.9999)
-        self.b2 = b2
-        
-        epochs = trial.suggest_int('epochs', 10, 100)
-        self.n_epochs = epochs
-
-        batch_size = trial.suggest_int('batch_size', 32, 50)
-        self.batch_size = batch_size
-
-        logging.info(f"Optuna parameters for trial {trial.number}: learning_rate={learning_rate}, b1={b1}, b2={b2}, epochs={epochs}, batch_size={batch_size}")
-        print(f"Optuna parameters for trial {trial.number}: learning_rate={learning_rate}, b1={b1}, b2={b2}, epochs={epochs}, batch_size={batch_size}")
-        # print(f"Optuna parameters: learning_rate={learning_rate}, b1={b1}, b2={b2}, epochs={epochs}, batch_size={batch_size}")
-
-        # Run model
-        self.train_model()
-        results_dict, graph_dict = self.evaluate_model()
-        logging.info(f"Final results: {results_dict}")
-        print(f"Final results: {results_dict}")
-
-        f1 = results_dict['f1']
-
-        return f1
-
-
     def train_model(self, save=False):
 
+        self.stats = Statistics()
         self.load_and_split_data(self.X, self.y, self.psd, self.params['data_split'])
 
         # Optimizers
@@ -384,8 +343,8 @@ class EEGTransformer():
                     f'  Test recall is {recall:.6f} \n\n',
                     f'  Time to train epoch #{e}: {epoch_hours}h {epoch_minutes}m {epoch_seconds}s \n',
                     f'  Time left to train model {rem_hours}h {rem_minutes}m {rem_seconds}s \n',
-                    f'  Model final time {final_time[0]}h {final_time[1]}m {final_time[2]}s \n',
-                    f"  GPU Usage {monitor_gpu_usage()}")
+                    f'  Model final time {final_time[0]}h {final_time[1]}m {final_time[2]}s \n')
+            monitor_gpu_usage()
             print("==================================================================")
 
             if e %self.params['tr_save_model_every_n_epoch'] == 0 and save==True:
@@ -884,6 +843,58 @@ class MLAnalysis:
         random.seed(self.r_seed)
         np.random.seed(self.r_seed)
         torch.manual_seed(self.r_seed)
+
+
+    def start_transformer_optuna_study(self, trials, params):
+        now = dt.now()
+        now_string = now.strftime("%d_%m_%y_%H_%M_%S")
+        logging.basicConfig(filename=f'optuna_log_{now_string}.txt', level=logging.INFO)
+        self.study = optuna.create_study(direction='maximize')
+
+        self.study.optimize(lambda trial: self.transformer_objective(trial, params), n_trials=trials)
+        print('Best hyperparameters: ', self.study.best_params)
+
+    def transformer_objective(self, trial, params):
+
+        # Modify params
+        self.__init__(self.params)
+        learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2)
+        params['tr_learning_rate']= learning_rate
+
+        b1 = trial.suggest_float('b1', 0.7, 0.999)
+        params['tr_b1'] = b1
+
+        b2 = trial.suggest_float('b2', 0.7, 0.9999)
+        params['tr_b2'] = b2
+        
+        epochs = trial.suggest_int('epochs', 10, 100)
+        params['tr_epochs'] = epochs
+
+        batch_size = trial.suggest_int('batch_size', 32, 50)
+        params['tr_batch_size'] = batch_size
+
+        # Initialize the transformer model
+        transformer = EEGTransformer(params)
+
+        # Add the data to the transformer
+        transformer.X = self.X
+        transformer.y = self.y
+        transformer.psd = self.psd
+
+        logging.info(f"Optuna parameters for trial {trial.number}: learning_rate={learning_rate}, b1={b1}, b2={b2}, epochs={epochs}, batch_size={batch_size}")
+        print(f"Optuna parameters for trial {trial.number}: learning_rate={learning_rate}, b1={b1}, b2={b2}, epochs={epochs}, batch_size={batch_size}")
+        # print(f"Optuna parameters: learning_rate={learning_rate}, b1={b1}, b2={b2}, epochs={epochs}, batch_size={batch_size}")
+
+        # Run model
+        transformer.train_model()
+        results_dict, graph_dict = transformer.evaluate_model()
+        logging.info(f"Final results: {results_dict}")
+        print(f"Final results: {results_dict}")
+
+        f1 = results_dict['f1']
+        torch.cuda.empty_cache()
+
+        return f1
     
     def run_transformer_model(self, params=None, save=False):
         params = load_parameters()
@@ -900,15 +911,17 @@ class MLAnalysis:
         # print("Building data loaders...", end="")
         # transformer.load_and_split_data(self.X, self.y, self.psd, self.params['data_split'])
         # print("Done", end="\n")
-        transformer.X = self.X
-        transformer.y = self.y
-        transformer.psd = self.psd
 
         if params['tr_optuna']==1:
             print(f"Starting Optuna model training with {params['tr_optuna_trials']} trials...", end="\n")
-            transformer.start_optuna_study(trials=params['tr_optuna_trials'])
+            self.start_transformer_optuna_study(trials=params['tr_optuna_trials'], params=params)
+            # transformer.start_optuna_study(trials=params['tr_optuna_trials'])
             print("Optuna model training Done", end="\n")
         else:
+            transformer.X = self.X
+            transformer.y = self.y
+            transformer.psd = self.psd
+
             print("Starting model training...", end="\n")
             transformer.train_model(save=True)
             print("Model training Done", end="\n")
