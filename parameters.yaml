@@ -68,6 +68,6 @@ tr_num_heads: 10
 tr_drop_p: 0.5
 tr_forward_expansion: 4
 tr_forward_drop_p: 0.5
-tr_save_model_every_n_epoch: 1
+tr_save_model_every_n_epoch: 10
 
 
