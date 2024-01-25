@@ -546,8 +546,8 @@ class FlankerData:
         # Option 2 = 0.5 seconds before action
         epochs, labels, epochs_list = self._get_events(processed_raw, inverted_event_id, event_id, 3)
 
-        # Cycle through each epoch and visualize them:
-        # if id >= 22:
+        # # Cycle through each epoch and visualize them:
+        # if id >= 1:
         #     for i in range(len(epochs_list)):
         #         # continue
         #         epochs_list[i].plot(title=f'Epoch {i} - Label: {labels[i]}', scalings='auto')  # Plot the epoch
@@ -578,7 +578,7 @@ class FlankerData:
 
 
         # Drop epochs based on z-scores
-        z_threshold = 5.0
+        z_threshold = 10000.0
         z_scores = (eeg_data_extracted - np.mean(eeg_data_extracted, axis=2, keepdims=True)) / np.std(eeg_data_extracted, axis=2, keepdims=True)
         z_scores_mean = np.mean(z_scores, axis=2)
         bad_epochs = np.any(np.abs(z_scores) > z_threshold, axis=(1, 2))

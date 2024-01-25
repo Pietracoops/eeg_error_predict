@@ -1,5 +1,5 @@
 # Database Name
-database_name: 'flanker_data_12_02_01_24_15_30_25.pkl' # 'flanker_data_10-4_5-_30_12_23_17_22_11.pkl'
+database_name:  flanker_data_13_24_01_24_13_47_26.pkl # 'flanker_data_12_02_01_24_15_30_25.pkl' # 'flanker_data_10-4_5-_30_12_23_17_22_11.pkl' # 
 data_split: 0.8
 
 # DATA PREP
@@ -8,8 +8,8 @@ undersampling: 0    # 1
 
 # Oversampling
 oversampling: 1
-os_strategy: SMOTE # [SMOTE, random]
-smote_ratio: 0.5
+os_strategy: random # [SMOTE, random]
+smote_ratio: 0.9
 
 # Grid Search
 grid_search: 1
@@ -26,12 +26,12 @@ no_participant_leakage: 1
 
 # Training
 cross_validation: 0
-cv_count: 15
+cv_count: 5
 
 # Neural Network
 model_name: nn_model_1    #BEST: 0.5601410934744269
 batch_size: 368            # 100
-epochs: 75                # 50
+epochs: 5                # 50
 learning_rate: 0.005084237414519601     # 0.0003
 K: 91                     # 90
 fc_hidden_size: 1024       # 128
@@ -56,7 +56,7 @@ tr_optuna: 0 # Enable optuna search
 tr_optuna_trials: 30
 tr_model_name: tr_model_1                 
 tr_batch_size: 38
-tr_epochs: 1500
+tr_epochs: 15
 tr_learning_rate: 0.0004970551888512231 #0.0002                  
 tr_c_dim: 2                               
 tr_b1: 0.7561626355615126 #0.5                                

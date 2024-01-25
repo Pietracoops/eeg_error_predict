@@ -74,24 +74,24 @@ def machine_learning_svm(filename):
     ml_obj.prepare_data(data_path)
 
     # Create SVM
-    # svm_params = {
-    #     'C': 1.0,          # Regularization parameter
-    #     'kernel': 'rbf',   # Kernel type (e.g., 'linear', 'rbf', 'poly')
-    #     'gamma': 'scale',  # Kernel coefficient ('scale' uses 1 / (n_features * X.var()))
-    #     'probability': True,  # Enable probability estimates
-    #     'shrinking': True,    # Use the shrinking heuristic
-    #     'tol': 0.001          # Tolerance for stopping criterion
-    # }
-    
     svm_params = {
-        'C': 1000.0,  # Regularization parameter
-        'class_weight': None,
-        'kernel': 'poly',  # Kernel type (e.g., 'linear', 'rbf', 'poly')
+        'C': 1.0,          # Regularization parameter
+        'kernel': 'rbf',   # Kernel type (e.g., 'linear', 'rbf', 'poly')
         'gamma': 'scale',  # Kernel coefficient ('scale' uses 1 / (n_features * X.var()))
         'probability': True,  # Enable probability estimates
-        'shrinking': True,  # Use the shrinking heuristic
-        'tol': 0.001  # Tolerance for stopping criterion
+        'shrinking': True,    # Use the shrinking heuristic
+        'tol': 0.001          # Tolerance for stopping criterion
     }
+    
+    # svm_params = {
+    #     'C': 1000.0,  # Regularization parameter
+    #     'class_weight': None,
+    #     'kernel': 'poly',  # Kernel type (e.g., 'linear', 'rbf', 'poly')
+    #     'gamma': 'scale',  # Kernel coefficient ('scale' uses 1 / (n_features * X.var()))
+    #     'probability': True,  # Enable probability estimates
+    #     'shrinking': True,  # Use the shrinking heuristic
+    #     'tol': 0.001  # Tolerance for stopping criterion
+    # }
     
     svm = SVC(**svm_params)
 
@@ -159,6 +159,8 @@ def machine_learning_transformer(filename):
 
 now = datetime.now()
 now_string = now.strftime("%d_%m_%y_%H_%M_%S")
+# machine_learning_svm("flanker_data_10-4_5-_30_12_23_17_22_11.pkl")
+# machine_learning_rf("flanker_data_10-4_5-_30_12_23_17_22_11.pkl")
 # process_files(f"flanker_data_13_{now_string}.pkl")
 # machine_learning_nn("flanker_data_9_-4_7-30_12_23_16_23_41.pkl")
 # machine_learning_nn("flanker_data_10-4_5-_30_12_23_17_22_11.pkl")

@@ -7,6 +7,7 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader, Dataset, TensorDataset, random_split
 import GPUtil
+from preprocessing import oversample_classes, undersample_classes
 
 def monitor_gpu_usage():
     """
@@ -72,10 +73,9 @@ def seconds_to_hms(seconds):
     minutes, seconds = divmod(remainder, 60)
     return hours, minutes, seconds
 class CustomDataset(Dataset):
-    def __init__(self, eeg_data, labels, psd_data, device):
+    def __init__(self, eeg_data, labels, device):
         self.eeg_data = eeg_data
         self.labels = labels
-        self.psd_data = psd_data
         self.device = device
 
     def __len__(self):
@@ -83,30 +83,74 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         eeg_sample = torch.Tensor(self.eeg_data[idx]).to(self.device)
-        psd_sample = torch.Tensor(self.psd_data[idx]).to(self.device)
         label = torch.Tensor([self.labels[idx]]).to(self.device)
 
-        return {'eeg_data': eeg_sample, 'psd_data': psd_sample, 'label': label}
-def load_and_split_data(self, eeg_data, labels, psd_data, batch_size, split_ratio=0.8):
+        return {'eeg_data': eeg_sample, 'label': label}
+    
+def load_and_split_data(self, eeg_data, labels, batch_size, params):
+    check_class_distribution(labels)
 
-    # Split the data into training and testing sets
-    eeg_data = torch.Tensor(eeg_data).to(self.device)
-    labels = torch.Tensor(labels).to(self.device)
-    psd_data = torch.Tensor(psd_data).to(self.device)
+    train_size = int(params['data_split'] * len(labels))
+    test_size = len(labels) - train_size
 
-    dataset = TensorDataset(eeg_data, labels, psd_data)
-    train_size = int(split_ratio * len(dataset))
-    test_size = len(dataset) - train_size
+    # Generate random indices for the random split
+    indices = list(range(len(labels)))
+    train_indices, test_indices = random_split(indices, [train_size, test_size])
 
-    custom_dataset = CustomDataset(eeg_data, labels, psd_data, self.device)
+    # Use the indices to split the eeg_data and labels
+    train_eeg_data = eeg_data[train_indices]
+    train_labels = labels[train_indices]
 
-    # Split the eeg data, labels, and psd_data into training and testing sets
-    train_dataset, test_dataset = random_split(custom_dataset, [train_size, test_size])
+    test_eeg_data = eeg_data[test_indices]
+    test_labels = labels[test_indices]
 
+    if params['undersampling'] == 1:
+        print("Performing under sampling:")
+        # Apply sampling strategy
+        train_eeg_data, train_labels = undersample_classes(train_eeg_data, train_labels)
+        check_class_distribution(train_labels)
+    elif params['oversampling'] == 1:
+        
+        # Reshape X first
+        X_shape = train_eeg_data.shape
+        X_reshaped = train_eeg_data.reshape(train_eeg_data.shape[0], -1)
+        if params['os_strategy'] == 'SMOTE':
+            print("Performing oversampling with SMOTE oversampler")
+            X_reshaped, train_labels = oversample_classes(X_reshaped, train_labels, strategy="SMOTE",
+                                                            ratio=params['smote_ratio'])
+        elif params['os_strategy'] == 'random':
+            print("Performing oversampling with random oversampler")
+            X_reshaped, train_labels = oversample_classes(X_reshaped, train_labels, strategy="random",
+                                                            ratio=params['smote_ratio'])
+        train_eeg_data = X_reshaped.reshape(-1, *X_shape[1:])
+        check_class_distribution(train_labels)
+
+    
+    # # Convert the resampled data to PyTorch tensors
+    # train_eeg_data = torch.Tensor(train_eeg_data).to(self.device)
+    # train_labels = torch.Tensor(train_labels).to(self.device)
+
+    # # Convert test data to PyTorch tensors
+    # test_eeg_data = torch.Tensor(test_eeg_data).to(self.device)
+    # test_labels = torch.Tensor(test_labels).to(self.device)
+        
+    # Create CustomDataset instances for training and testing data
+    train_dataset = CustomDataset(train_eeg_data, train_labels, self.device)
+    test_dataset = CustomDataset(test_eeg_data, test_labels, self.device)
+
+    # Create DataLoader instances
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-    return train_dataset, test_dataset, train_loader, test_loader
+    # # Create list of dictionaries for each sample
+    # train_data = [{'eeg_data': eeg, 'label': label} for eeg, label in zip(train_eeg_data, train_labels)]
+    # test_data = [{'eeg_data': eeg, 'label': label} for eeg, label in zip(test_eeg_data, test_labels)]
+
+    # # Create DataLoader instances
+    # train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
+    # test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
+
+    return train_loader, test_loader
 
 def check_class_distribution(y):
     class_distribution = Counter(y)

@@ -252,19 +252,18 @@ class EEGTransformer():
         aug_label = aug_label.long()
         return aug_data, aug_label
 
-    def load_and_split_data(self, eeg_data, labels, psd_data, split_ratio=0.8):
+    def load_and_split_data(self, eeg_data, labels):
 
-        self.train_dataset, self.test_dataset, self.train_loader, self.test_loader = load_and_split_data(self,
-                                                                                                         eeg_data,
-                                                                                                         labels, 
-                                                                                                         psd_data, 
-                                                                                                         self.batch_size, 
-                                                                                                         split_ratio)
+        self.train_loader, self.test_loader = load_and_split_data(self,
+                                                                  eeg_data,
+                                                                  labels, 
+                                                                  self.batch_size, 
+                                                                  self.params)
 
     def train_model(self, save=False):
 
         self.stats = Statistics()
-        self.load_and_split_data(self.X, self.y, self.psd, self.params['data_split'])
+        self.load_and_split_data(self.X, self.y)
 
         # Optimizers
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, betas=(self.b1, self.b2))
@@ -591,14 +590,14 @@ class EEGClassifier(nn.Module):
         # If no match is found, return default values
         return 3, 1 
 
-    def load_and_split_data(self, eeg_data, labels, psd_data, split_ratio=0.8):
+    def load_and_split_data(self, eeg_data, labels, psd_data):
 
-        self.train_dataset, self.test_dataset, self.train_loader, self.test_loader = load_and_split_data(self,
+        self.train_loader, self.test_loader = load_and_split_data(self,
                                                                                                          eeg_data,
                                                                                                          labels, 
                                                                                                          psd_data, 
                                                                                                          self.batch_size, 
-                                                                                                         split_ratio)
+                                                                                                         self.params)
 
 
     def load_data(self, X_train, y_train, X_test, y_test):
@@ -950,7 +949,7 @@ class MLAnalysis:
 
         nn_model.channels = self.channels
         print("Building data loaders...", end="")
-        nn_model.load_and_split_data(self.X, self.y, self.psd, 0.8)
+        nn_model.load_and_split_data(self.X, self.y, self.psd)
 
         print("Done", end="\n")
         # self.nn_model.load_data(self.X_train, self.y_train, self.X_test, self.y_test)
@@ -981,7 +980,7 @@ class MLAnalysis:
         self.channels = [s for s in self.channels if s not in ('Cz', 'ECG1')]
         self.X, self.y, self.psd = flankerdata.concatenate_data()
         print("Data prepared successfully for Neural Network")
-        
+
 
     def prepare_data(self, filepath):
         flankerdata = load_flanker_data_from_pickle(filepath)
@@ -1088,13 +1087,11 @@ class MLAnalysis:
 
     def launch_model(self, model, model_name, model_params):
 
-        print("Fitting model...")
-        model.fit(self.X_train, self.y_train)
 
-        print("Done Fitting...")
         if self.params['cross_validation']:
+            print(f"Performing Cross Validation with {self.params['cv_count']} folds...")
             # Perform cross-validation
-            cv_preds = cross_val_predict(model, self.X_train, self.y_train, cv=self.params['cv_count'])
+            cv_preds = cross_val_predict(model, self.X_train, self.y_train, cv=self.params['cv_count'], n_jobs=3, verbose=100)
 
             # Calculate metrics on the training set (cross-validation predictions)
             cv_f1 = get_f1_score(self.y_train, cv_preds)
@@ -1102,6 +1099,12 @@ class MLAnalysis:
 
             cv_acc = get_accuracy(self.y_train, cv_preds)
             print(f"[{model_name}]: Training Accuracy (CV): {cv_acc}")
+            return
+        else:
+            print("Fitting model...")
+            model.fit(self.X_train, self.y_train)
+            print("Done Fitting...")
+
 
         test_preds = model.predict(self.X_test)
         test_probs = model.predict_proba(self.X_test)
@@ -1126,7 +1129,8 @@ class MLAnalysis:
                         'accuracy': acc,
                         'roc_auc': roc_auc,
                         'precision': precision,
-                        'recall': recall}
+                        'recall': recall,
+                        'kappa': None}
 
         save_model_stats(f"{model_name}_{f1}", model_params, results_dict, conf_mat, roc_curve)
 
