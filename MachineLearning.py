@@ -982,7 +982,8 @@ class MLAnalysis:
         print("Data prepared successfully for Neural Network")
 
 
-    def prepare_data(self, filepath):
+    def prepare_data(self, data_path):
+        filepath = data_path + "\\" + self.params['database_name']
         flankerdata = load_flanker_data_from_pickle(filepath)
 
         if self.params['no_participant_leakage']:

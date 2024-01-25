@@ -176,7 +176,7 @@ def save_model(model, model_name, additional_save_path=None):
         path.mkdir(parents=True, exist_ok=False)
     torch.save(model.state_dict(), f'{path}/model.pth')
 
-def save_model_stats(model_name, params, results, conf_mat, roc_curve, model=None, stats=None):
+def save_model_stats(model_name, params, results, conf_mat, roc_curve, model=None, stats=None, additional_params=None):
     # Save model parameters and statistics to a text file
     root_path = RESULTS_PATH / model_name
     if not root_path.is_dir():
@@ -187,6 +187,11 @@ def save_model_stats(model_name, params, results, conf_mat, roc_curve, model=Non
         file.write("Model Parameters:\n")
         for key, value in params.items():
             file.write(f"{key}: {value}\n")
+
+        if additional_params != None:
+            file.write("Additional Parameters:\n")
+            for key, value in additional_params.items():
+                file.write(f"{key}: {value}\n")
 
         file.write(" ======================= Model Statistics: ========================\n\n")
         file.write(f"Accuracy: {results['accuracy']:.4f}\n\n")

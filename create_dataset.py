@@ -9,7 +9,7 @@ from tkinter import *
 import pickle
 from datetime import datetime
 from sklearn.model_selection import train_test_split
-from sklearn.svm import SVC
+from sklearn.svm import SVC, LinearSVC
 from sklearn.ensemble import RandomForestClassifier
 
 import matplotlib.pyplot as plt
@@ -66,22 +66,22 @@ def process_brainvision_files():
     print("Complete processing")
 
 
-def machine_learning_svm(filename):
-    data_path = os.getcwd() + "\\" + filename
+def machine_learning_svm():
+    data_path = os.getcwd()
     parameter_path = os.getcwd() + "\\parameters.yaml"
 
     ml_obj = MLAnalysis(parameter_path)
     ml_obj.prepare_data(data_path)
 
-    # Create SVM
-    svm_params = {
-        'C': 1.0,          # Regularization parameter
-        'kernel': 'rbf',   # Kernel type (e.g., 'linear', 'rbf', 'poly')
-        'gamma': 'scale',  # Kernel coefficient ('scale' uses 1 / (n_features * X.var()))
-        'probability': True,  # Enable probability estimates
-        'shrinking': True,    # Use the shrinking heuristic
-        'tol': 0.001          # Tolerance for stopping criterion
-    }
+    # # Create SVM
+    # svm_params = {
+    #     'C': 1.0,          # Regularization parameter
+    #     'kernel': 'rbf',   # Kernel type (e.g., 'linear', 'rbf', 'poly')
+    #     'gamma': 'scale',  # Kernel coefficient ('scale' uses 1 / (n_features * X.var()))
+    #     'probability': True,  # Enable probability estimates
+    #     'shrinking': True,    # Use the shrinking heuristic
+    #     'tol': 0.001          # Tolerance for stopping criterion
+    # }
     
     # svm_params = {
     #     'C': 1000.0,  # Regularization parameter
@@ -92,6 +92,15 @@ def machine_learning_svm(filename):
     #     'shrinking': True,  # Use the shrinking heuristic
     #     'tol': 0.001  # Tolerance for stopping criterion
     # }
+
+    svm_params = {
+    'C': 1.0,          # Regularization parameter
+    'kernel': 'linear',   # Use a linear kernel
+    'probability': True,  # Enable probability estimates
+    'shrinking': True,    # Use the shrinking heuristic
+    'tol': 0.001,          # Tolerance for stopping criterion
+    'max_iter': 1000      # Maximum number of iterations for optimization
+    }
     
     svm = SVC(**svm_params)
 
@@ -159,13 +168,13 @@ def machine_learning_transformer(filename):
 
 now = datetime.now()
 now_string = now.strftime("%d_%m_%y_%H_%M_%S")
-# machine_learning_svm("flanker_data_10-4_5-_30_12_23_17_22_11.pkl")
+machine_learning_svm()
 # machine_learning_rf("flanker_data_10-4_5-_30_12_23_17_22_11.pkl")
 # process_files(f"flanker_data_13_{now_string}.pkl")
 # machine_learning_nn("flanker_data_9_-4_7-30_12_23_16_23_41.pkl")
 # machine_learning_nn("flanker_data_10-4_5-_30_12_23_17_22_11.pkl")
 # machine_learning_nn("flanker_data_12_02_01_24_15_30_25.pkl")
-machine_learning_transformer("flanker_data_12_02_01_24_15_30_25.pkl")
+# machine_learning_transformer("flanker_data_12_02_01_24_15_30_25.pkl")
 # machine_learning_nn_optuna("flanker_data_12_02_01_24_15_30_25.pkl")
 
 
