@@ -117,10 +117,10 @@ def machine_learning_model_search(filename):
     # ml_obj.search_model_domain()
 
 def machine_learning_rf(filename):
-    data_path = os.getcwd() + "\\" + filename
+    data_path = os.getcwd()
     parameter_path = os.getcwd() + "\\parameters.yaml"
 
-    ml_obj = MLAnalysis(parameter_path)
+    ml_obj = MLAnalysis()
     ml_obj.prepare_data(data_path)
 
     # ml_obj.search_model_domain()
@@ -169,7 +169,7 @@ def machine_learning_transformer(filename):
 now = datetime.now()
 now_string = now.strftime("%d_%m_%y_%H_%M_%S")
 machine_learning_svm()
-# machine_learning_rf("flanker_data_10-4_5-_30_12_23_17_22_11.pkl")
+# machine_learning_rf()
 # process_files(f"flanker_data_13_{now_string}.pkl")
 # machine_learning_nn("flanker_data_9_-4_7-30_12_23_16_23_41.pkl")
 # machine_learning_nn("flanker_data_10-4_5-_30_12_23_17_22_11.pkl")
