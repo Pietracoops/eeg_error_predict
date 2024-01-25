@@ -80,7 +80,8 @@ def machine_learning_svm():
     #     'gamma': 'scale',  # Kernel coefficient ('scale' uses 1 / (n_features * X.var()))
     #     'probability': True,  # Enable probability estimates
     #     'shrinking': True,    # Use the shrinking heuristic
-    #     'tol': 0.001          # Tolerance for stopping criterion
+    #     'tol': 0.001,          # Tolerance for stopping criterion
+    #     'verbose': True       # Enable verbose output during training
     # }
     
     # svm_params = {
@@ -90,7 +91,8 @@ def machine_learning_svm():
     #     'gamma': 'scale',  # Kernel coefficient ('scale' uses 1 / (n_features * X.var()))
     #     'probability': True,  # Enable probability estimates
     #     'shrinking': True,  # Use the shrinking heuristic
-    #     'tol': 0.001  # Tolerance for stopping criterion
+    #     'tol': 0.001,  # Tolerance for stopping criterion
+    #     'verbose': True       # Enable verbose output during training
     # }
 
     svm_params = {
@@ -99,7 +101,8 @@ def machine_learning_svm():
     'probability': True,  # Enable probability estimates
     'shrinking': True,    # Use the shrinking heuristic
     'tol': 0.001,          # Tolerance for stopping criterion
-    'max_iter': 1000      # Maximum number of iterations for optimization
+    'max_iter': 1000,      # Maximum number of iterations for optimization
+    'verbose': True       # Enable verbose output during training
     }
     
     svm = SVC(**svm_params)
@@ -114,9 +117,10 @@ def machine_learning_model_search(filename):
     ml_obj = MLAnalysis(parameter_path)
     ml_obj.prepare_data(data_path)
 
-    # ml_obj.search_model_domain()
+    ml_obj.search_model_domain()
 
-def machine_learning_rf(filename):
+
+def machine_learning_rf():
     data_path = os.getcwd()
     parameter_path = os.getcwd() + "\\parameters.yaml"
 
@@ -125,14 +129,14 @@ def machine_learning_rf(filename):
 
     # ml_obj.search_model_domain()
 
-    random_forest = RandomForestClassifier()
     rf_params = {
         "bootstrap": True, "ccp_alpha": 0.0, "class_weight": None, "criterion": "gini", "max_depth": 50,
          "max_features": 0.7, "max_leaf_nodes": None, "max_samples": None, "min_impurity_decrease": 0.0,
          "min_samples_leaf": 1, "min_samples_split": 10, "min_weight_fraction_leaf": 0.0, "n_estimators": 5,
          "n_jobs": None,
-         "oob_score": False, "random_state": None, "verbose": 0, "warm_start": False
+         "oob_score": False, "random_state": None, "verbose": 0, "warm_start": False, 'verbose': True
     }
+    random_forest = RandomForestClassifier(**rf_params)
     ml_obj.launch_model(random_forest, 'rf_1', rf_params)
 
 def machine_learning_nn(filename):
@@ -155,7 +159,7 @@ def machine_learning_nn_optuna(filename):
 
     print("Done")
 
-def machine_learning_transformer(filename):
+def machine_learning_transformer():
     print("Running machine learning with transformer...")
     data_path = os.getcwd()
     parameter_path = os.getcwd() + "\\parameters.yaml"
@@ -168,13 +172,13 @@ def machine_learning_transformer(filename):
 
 now = datetime.now()
 now_string = now.strftime("%d_%m_%y_%H_%M_%S")
-machine_learning_svm()
+# machine_learning_svm()
 # machine_learning_rf()
 # process_files(f"flanker_data_13_{now_string}.pkl")
 # machine_learning_nn("flanker_data_9_-4_7-30_12_23_16_23_41.pkl")
 # machine_learning_nn("flanker_data_10-4_5-_30_12_23_17_22_11.pkl")
 # machine_learning_nn("flanker_data_12_02_01_24_15_30_25.pkl")
-# machine_learning_transformer("flanker_data_12_02_01_24_15_30_25.pkl")
+machine_learning_transformer()
 # machine_learning_nn_optuna("flanker_data_12_02_01_24_15_30_25.pkl")
 
 

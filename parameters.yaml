@@ -41,29 +41,43 @@ activation: leaky_relu          # relu, elu, selu, leaky_relu
 dropout_prob: 0.3         # 0
 psd_usage: 0               # 0
 
-# # Neural Network
-# model_name: nn_model_1    #BEST: 0.5601410934744269
-# batch_size: 638            # 100
-# epochs: 41                # 50
-# learning_rate: 0.0073341     # 0.0003
-# K: 87                     # 90
-# fc_hidden_size: 712       # 128
-# optimizer: Adagrad   # [Adam, Adagrad]         # Adam
-# psd_usage: 0               # 0
+#================== Transformer Parameters =================
+tr_model_name: tr_model_1
 
-# Transformer Parameters
-tr_optuna: 0 # Enable optuna search
+# Optuna Settings
+tr_optuna: 1 # Enable optuna search
 tr_optuna_trials: 30
-tr_model_name: tr_model_1                 
+
+# Optimizer Settings
+tr_optimizer: Adam # Adam, SGD, Adagrad
+tr_adagrad_lr_decay: 0.000001
+tr_adagrad_weight_decay: 0.00001
+tr_adagrad_initial_accumulator_value: 0.1
+tr_sgd_momentum: 0.9
+
+# Scheduler Settings
+tr_scheduler: CyclicLR # ReduceLROnPlateau, StepLR, CosineAnnealingLR, CosineAnnealingWarmRestarts, CyclicLR
+tr_StepLR_step_size: 0.5 # The number of iterations (or epochs) to decrease learning rate by gamma.
+tr_StepLR_gamma: 0.5  # The multiplicative factor by which the learning rate will be reduced.
+tr_CosineAnnealingLR_T_max: 20 # The number of iterations (or epochs) in one half-cycle of the cosine annealing schedule.
+tr_CosineAnnealingLR_eta_min: 0.001 # Minimum learning rate.
+tr_CosineAnnealingWarmRestarts_T_0: 10 # The number of iterations (or epochs) for the warmup phase.
+tr_CosineAnnealingWarmRestarts_T_mult: 1  # The number of iterations (or epochs) for the restart phase.
+tr_CosineAnnealingWarmRestarts_eta_min: 0.001  # Minimum learning rate.
+tr_CosineAnnealingWarmRestarts_last_epoch: -1  # The index of last epoch.
+tr_CyclicLR_base_lr: 0.001 # The base learning rate.
+tr_CyclicLR_max_lr: 0.01  # The maximum learning rate.
+tr_CyclicLR_cycle_momentum: False # If True, cycle momentum during the cycle.
+
 tr_batch_size: 38
 tr_epochs: 15
-tr_learning_rate: 0.0004970551888512231 #0.0002                  
-tr_c_dim: 2                               
-tr_b1: 0.7561626355615126 #0.5                                
-tr_b2: 0.9364485902864262 #0.999                              
-tr_emb_size: 20                           
-tr_depth: 4                               
-tr_n_classes: 1                           
+tr_learning_rate: 0.0004970551888512231 #0.0002 
+tr_c_dim: 2   
+tr_b1: 0.7561626355615126 #0.5  
+tr_b2: 0.9364485902864262 #0.999  
+tr_emb_size: 20   
+tr_depth: 4    
+tr_n_classes: 1   
 tr_num_heads: 10
 tr_drop_p: 0.5
 tr_forward_expansion: 4

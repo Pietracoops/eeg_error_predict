@@ -180,7 +180,7 @@ def save_model_stats(model_name, params, results, conf_mat, roc_curve, model=Non
     # Save model parameters and statistics to a text file
     root_path = RESULTS_PATH / model_name
     if not root_path.is_dir():
-        root_path.mkdir(parents=False, exist_ok=False)
+        root_path.mkdir(parents=True, exist_ok=False)
 
     save_path = RESULTS_PATH / model_name / "results.txt"
     with open(save_path, 'w') as file:
@@ -228,6 +228,8 @@ def save_params(params, model_name=None):
             filename = (f"{model_name}_params_{now_string}.json")
 
         file_path = PARAMS_DIR / filename
+        if not file_path.is_dir():
+            file_path.mkdir(parents=True, exist_ok=False)
         with open(file_path, "w") as fout:
             json.dump(params, fout)
 

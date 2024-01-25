@@ -200,14 +200,20 @@ class EEGTransformer():
         self.drop_p = self.params['tr_drop_p']
         self.forward_expansion = self.params['tr_forward_expansion']
         self.forward_drop_p = self.params['tr_forward_drop_p']
-        self.embedding_size = self.params['tr_emb_size']
+        self.embedding_size = self.params['tr_emb_size'] # This is K
         self.depth = self.params['tr_depth']
         self.n_classes = self.params['tr_n_classes']
         self.dimension = (190, 50)
 
+        # Optimizer Parameters
+        self.lr_decay = self.params['tr_adagrad_lr_decay']
+        self.weight_decay = self.params['tr_adagrad_weight_decay']
+        self.initial_accumulator_value = self.params['tr_adagrad_initial_accumulator_value']
+        self.momentum = self.params['tr_sgd_momentum']
+
         self.criterion_l1 = torch.nn.L1Loss().cuda()
         self.criterion_l2 = torch.nn.MSELoss().cuda()
-        # self.criterion_cls = torch.nn.CrossEntropyLoss().cuda()
+
         self.criterion_cls = torch.nn.BCELoss().cuda()
 
         self.model = Conformer(emb_size=self.embedding_size,
@@ -216,13 +222,24 @@ class EEGTransformer():
                                num_heads=self.num_heads,
                                drop_p=self.drop_p,
                                forward_expansion=self.forward_expansion,
-                               forward_drop_p=self.forward_drop_p).cuda()
+                               forward_drop_p=self.forward_drop_p)
+        self.model.apply(self.weights_init).cuda()
         self.model = nn.DataParallel(self.model, device_ids=[i for i in range(len(gpus))])
         self.model = self.model.cuda()
 
         self.stats = Statistics()
 
         # Segmentation and Reconstruction (S&R) data augmentation
+
+    def weights_init(self,m):
+        if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+            init.xavier_uniform_(m.weight.data)
+            if m.bias is not None:
+                init.zeros_(m.bias.data)
+        elif isinstance(m, nn.BatchNorm2d):
+            init.ones_(m.weight.data)
+            init.zeros_(m.bias.data)
+
     def interaug(self, timg, label):
         aug_data = []
         aug_label = []
@@ -266,7 +283,50 @@ class EEGTransformer():
         self.load_and_split_data(self.X, self.y)
 
         # Optimizers
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, betas=(self.b1, self.b2))
+        if self.params['tr_optimizer'] == 'Adam':
+            print("Using Adam Optimizer")
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, betas=(self.b1, self.b2))
+        elif self.params['tr_optimizer'] == 'SGD':
+            print("Using SGD Optimizer")
+            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr, momentum=self.momentum)
+        elif self.params['tr_optimizer'] == 'Adagrad':
+            print("Using Adagrad Optimizer")
+            self.optimizer = torch.optim.Adagrad(self.model.parameters(),
+                                                 lr=self.lr, lr_decay=self.lr_decay, 
+                                                 weight_decay=self.weight_decay, 
+                                                 initial_accumulator_value=self.initial_accumulator_value)
+
+        # Scheduler
+        if self.params['tr_scheduler'] == 'StepLR':
+            print("Using StepLR Scheduler")
+            self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, 
+                                                              step_size=self.params['tr_StepLR_step_size'], # The number of iterations (or epochs) to decrease learning rate by gamma.
+                                                              gamma=self.params['tr_StepLR_gamma']) # The multiplicative factor by which the learning rate will be reduced.
+        elif self.params['tr_scheduler'] == 'CosineAnnealingLR':
+            print("Using CosineAnnealingLR Scheduler")
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, 
+                                                                   T_max=self.params['tr_CosineAnnealingLR_T_max'], # The number of iterations (or epochs) in one half-cycle of the cosine annealing schedule.
+                                                                   eta_min=self.params['tr_CosineAnnealingLR_eta_min']) # Minimum learning rate.
+        elif self.params['tr_scheduler'] == 'CosineAnnealingWarmRestarts':
+            print("Using CosineAnnealingWarmRestarts Scheduler")
+            torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(self.optimizer, 
+                                                                 T_0=self.params['tr_CosineAnnealingWarmRestarts_T_0'], # The number of iterations (or epochs) for the warmup phase.
+                                                                 T_mult=self.params['tr_CosineAnnealingWarmRestarts_T_mult'], # The number of iterations (or epochs) for the restart phase.
+                                                                 eta_min=self.params['tr_CosineAnnealingWarmRestarts_eta_min'], # Minimum learning rate.
+                                                                 last_epoch=self.params['tr_CosineAnnealingWarmRestarts_last_epoch'], # The index of last epoch.
+                                                                 verbose=False)
+        elif self.params['tr_scheduler'] == 'CyclicLR':
+            print("Using CyclicLR Scheduler")
+            scheduler = torch.optim.lr_scheduler.CyclicLR(self.optimizer, 
+                                                          base_lr=self.params['tr_CyclicLR_base_lr'],               # The base learning rate.
+                                                          max_lr=self.params['tr_CyclicLR_max_lr'],                 # The maximum learning rate.
+                                                          cycle_momentum=self.params['tr_CyclicLR_cycle_momentum']) # If True, cycle momentum during the cycle.
+        elif self.params['tr_scheduler'] == 'plateau':
+            print("Using ReduceLROnPlateau Scheduler")
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=5, factor=0.1)
+
+
+
         train_start_time = time.time()
         for e in range(self.n_epochs):
             epoch_start_time = time.time()
@@ -309,6 +369,8 @@ class EEGTransformer():
 
                 all_predictions.extend(local_outputs)
                 all_labels.extend(local_labels)
+
+            scheduler.step() # Update learning rate at end of each epoch
 
             # Calculate train stats
             train_f1 = get_f1_score(all_labels, all_predictions)
@@ -860,35 +922,69 @@ class MLAnalysis:
         learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-2)
         params['tr_learning_rate']= learning_rate
 
-        b1 = trial.suggest_float('b1', 0.7, 0.999)
+        b1 = trial.suggest_float('b1', 0.0, 0.999)
         params['tr_b1'] = b1
 
-        b2 = trial.suggest_float('b2', 0.7, 0.9999)
+        b2 = trial.suggest_float('b2', 0.0, 0.9999)
         params['tr_b2'] = b2
         
-        epochs = trial.suggest_int('epochs', 50, 200)
+        epochs = trial.suggest_int('epochs', 1, 2)
         params['tr_epochs'] = epochs
 
         batch_size = trial.suggest_int('batch_size', 32, 50)
         params['tr_batch_size'] = batch_size
 
+        drop_p = trial.suggest_float('drop_p', 0.0, 0.5)
+        params['tr_drop_p'] = drop_p
+
+        forward_drop_p = trial.suggest_float('forward_drop_p', 0.0, 0.5)
+        params['tr_forward_drop_p'] = forward_drop_p
+
+        embedding_size = trial.suggest_int('embedding_size', 20, 100)
+        params['tr_embedding_size'] = embedding_size
+
         # Initialize the transformer model
         transformer = EEGTransformer(params)
+
+        now = dt.now()
+        now_string = now.strftime("%d_%m_%y_%H_%M_%S")
+        model_identifier = f"Optuna_Trial_{trial.number}_{transformer.name}_{params['tr_model_name']}_{now_string}"
 
         # Add the data to the transformer
         transformer.X = self.X
         transformer.y = self.y
         transformer.psd = self.psd
-
-        logging.info(f"Optuna parameters for trial {trial.number}: learning_rate={learning_rate}, b1={b1}, b2={b2}, epochs={epochs}, batch_size={batch_size}")
-        print(f"Optuna parameters for trial {trial.number}: learning_rate={learning_rate}, b1={b1}, b2={b2}, epochs={epochs}, batch_size={batch_size}")
-        # print(f"Optuna parameters: learning_rate={learning_rate}, b1={b1}, b2={b2}, epochs={epochs}, batch_size={batch_size}")
+        logging.info(f"Optuna parameters: "
+                    f"learning_rate={learning_rate}, "
+                    f"b1={b1}, "
+                    f"b2={b2}, "
+                    f"epochs={epochs}, "
+                    f"batch_size={batch_size}, "
+                    f"drop_p={drop_p}, "
+                    f"forward_drop_p={forward_drop_p}, "
+                    f"embedding_size={embedding_size}")
+        print(f"Optuna parameters: learning_rate={learning_rate},"
+              f"b1={b1},"
+              f"b2={b2},"
+              f"epochs={epochs},"
+              f"batch_size={batch_size},"
+              f"drop_p={drop_p},"
+              f"forward_drop_p={forward_drop_p},"
+              f"embedding_size={embedding_size}")
+        
 
         # Run model
         transformer.train_model()
         results_dict, graph_dict = transformer.evaluate_model()
         logging.info(f"Final results: {results_dict}")
         print(f"Final results: {results_dict}")
+
+        save_model_stats(model_identifier,
+                self.params, results_dict,
+                graph_dict['conf_mat'],
+                graph_dict['roc_curve'],
+                transformer.model,
+                transformer.stats)
 
         f1 = results_dict['f1']
         torch.cuda.empty_cache()
@@ -916,6 +1012,7 @@ class MLAnalysis:
             self.start_transformer_optuna_study(trials=params['tr_optuna_trials'], params=params)
             # transformer.start_optuna_study(trials=params['tr_optuna_trials'])
             print("Optuna model training Done", end="\n")
+            return None, None
         else:
             transformer.X = self.X
             transformer.y = self.y
@@ -937,7 +1034,7 @@ class MLAnalysis:
                                 transformer.model,
                                 transformer.stats)
         
-        return results_dict, graph_dict
+            return results_dict, graph_dict
 
 
 
@@ -1080,7 +1177,7 @@ class MLAnalysis:
 
             if self.params['save_plots']:
                 # Get the date and time
-                now = datetime.now()
+                now = dt.now()
                 now_string = now.strftime("%d_%m_%y_%H_%M_%S")
                 save_plot(conf_mat, f"{best_gs_keys[i]}_{f1}_conf_mat_{now_string}.png")
                 save_plot(roc_curve, f"{best_gs_keys[i]}_{f1}_roc_curve_{now_string}.png")
