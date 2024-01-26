@@ -928,7 +928,7 @@ class MLAnalysis:
         b2 = trial.suggest_float('b2', 0.0, 0.9999)
         params['tr_b2'] = b2
         
-        epochs = trial.suggest_int('epochs', 1, 2)
+        epochs = trial.suggest_int('epochs', 50, 150)
         params['tr_epochs'] = epochs
 
         batch_size = trial.suggest_int('batch_size', 32, 50)
